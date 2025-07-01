@@ -108,6 +108,26 @@ python test_vllm_installation.py
 ./vllm_latest_installation.sh
 ```
 
+## Pre-Implementation Verification
+
+### 📋 **Script Validation Requirements**
+- [ ] Verify all 5 scripts exist in [`/scripts/`](../scripts/) directory
+  - [`vllm_latest_installation.sh`](../scripts/vllm_latest_installation.sh) (382 lines)
+  - [`vllm_quick_install.sh`](../scripts/vllm_quick_install.sh) (34 lines)
+  - [`test_vllm_installation.py`](../scripts/test_vllm_installation.py) (197 lines)
+  - [`start_vllm_server.py`](../scripts/start_vllm_server.py) (66 lines)
+  - [`test_vllm_client.py`](../scripts/test_vllm_client.py) (83 lines)
+- [ ] Confirm script executability (`chmod +x` applied)
+- [ ] Validate script line counts (all under 500 lines per task rules)
+- [ ] Verify script dependencies and imports are valid
+
+### 🔍 **Dependency Verification Checklist**
+- [ ] Pre-flight check for existing PyTorch installation compatibility
+- [ ] Verify CUDA toolkit version matches GPU requirements (8.9 for RTX 4070 Ti SUPER)
+- [ ] Confirm Python 3.12 environment is properly configured
+- [ ] Validate existing `/opt/citadel/dev-env` environment integrity
+- [ ] Check available disk space for vLLM installation (minimum 5GB recommended)
+
 ## Validation Checklist
 
 ### ✅ Pre-Installation Validation
@@ -144,6 +164,57 @@ python test_vllm_installation.py
 - **Comprehensive Testing**: 6 test categories covering all functionality
 - **Production Ready**: Suitable for immediate deployment
 
+## Service Integration Impact
+
+### 🔄 **Existing vLLM Services Transition**
+- **Safe Migration Strategy**: How to safely transition from vLLM 0.2.7 to 0.6.1+
+  - Stop existing vLLM services before installation
+  - Backup current configuration files in `/opt/citadel/configs/`
+  - Document current model locations and access patterns
+- **Service Compatibility**: Validation of existing service dependencies
+- **Configuration Preservation**: Maintain custom settings during upgrade
+
+### ⚙️ **Configuration Management Updates**
+- **Environment Variables**: Update `.env` files to reflect new vLLM version
+- **Service Definitions**: Modify systemd service files if present
+- **API Endpoints**: Validate endpoint compatibility between versions
+- **Model Storage**: Ensure model file paths remain accessible post-installation
+
+### 🌐 **Network Integration Details**
+- **API Port Configuration**: Default ports 11400-11500 for OpenAI-compatible API
+- **Health Check Endpoints**: `/health` and `/metrics` endpoints for monitoring
+- **Load Balancer Integration**: Configuration for multi-instance deployment
+- **Security Considerations**: API access control and token management
+
+## Rollback Procedures
+
+### 🔄 **Emergency Rollback Strategy**
+In case of installation failure or compatibility issues:
+
+```bash
+# 1. Stop new vLLM services
+sudo systemctl stop vllm-server
+
+# 2. Restore previous environment
+source /opt/citadel/dev-env/bin/activate
+pip uninstall vllm
+
+# 3. Reinstall previous version (if needed)
+pip install vllm==0.2.7
+
+# 4. Restore configuration backups
+cp /opt/citadel/configs/backup/* /opt/citadel/configs/
+
+# 5. Restart services with previous configuration
+sudo systemctl start vllm-server
+```
+
+### 📋 **Rollback Validation**
+- [ ] Previous vLLM version operational
+- [ ] All dependent services functioning
+- [ ] Model loading and inference working
+- [ ] API endpoints responding correctly
+
 ## Troubleshooting Support
 
 ### Common Issues Covered
@@ -159,14 +230,47 @@ python test_vllm_installation.py
 - **Performance Testing**: Throughput and latency benchmarking
 - **Integration Testing**: End-to-end service validation
 
+## Task Result Documentation
+
+### 📊 **Required Documentation Upon Completion**
+Create `/tasks/task-results/task-PLANB-05-results.md` including:
+
+**Task Completion Details:**
+- Installation method used (quick vs detailed)
+- Actual installation duration and any deviations
+- Validation test results with pass/fail status
+- Performance benchmark outcomes
+
+**Technical Observations:**
+- Any compatibility issues encountered
+- Performance improvements observed
+- Configuration adjustments made
+- Integration challenges resolved
+
+**Deviations and Anomalies:**
+- Any steps that differed from planned procedure
+- Unexpected issues and their resolutions
+- Recommendations for future installations
+- Updates needed to documentation or scripts
+
+### 📋 **Task Tracker Integration**
+- **Mark completed in**: [`/tasks/task-tracker.md`](../tasks/task-tracker.md)
+- **Log discoveries in**: [`/tasks/task-tracker-backlog.md`](../tasks/task-tracker-backlog.md)
+- **Update project status**: Reflect PLANB-05 completion in project documentation
+
 ## Next Steps
 
 After successful PLANB-05 implementation:
 
 1. **✅ Complete**: Execute PLANB-05 using the provided implementation guide
-2. **➡️ Next**: Proceed to [`PLANB-06-Storage-Symlinks.md`](tasks/PLANB-06-Storage-Symlinks.md)
+2. **➡️ Next**: Proceed to [`PLANB-06-Storage-Symlinks.md`](../tasks/PLANB-06-Storage-Symlinks.md)
 3. **🔄 Integration**: Update existing service configurations to use new vLLM installation
 4. **📊 Monitoring**: Configure performance monitoring and alerting
+
+### **Task Dependencies Context**
+- **Prerequisites**: PLANB-04 (Python Environment) must be completed successfully
+- **Follow-up Tasks**: PLANB-06 depends on successful PLANB-05 completion
+- **Integration Points**: Service configuration updates in PLANB-07 will reference this installation
 
 ## Implementation Timeline
 
@@ -177,6 +281,32 @@ After successful PLANB-05 implementation:
 | **Phase 3** | vLLM Installation Execution | 15-90 minutes | 🔄 **READY** |
 | **Phase 4** | Validation & Testing | 30 minutes | 🔄 **READY** |
 | **Total** | **Complete PLANB-05 Implementation** | **3-4 hours** | **🎯 READY** |
+
+### **Validation Script Examples**
+
+**Pre-Installation Check:**
+```bash
+# Verify environment readiness
+python /validation/pre_install_check.py
+
+# Check script availability
+ls -la scripts/vllm_*.sh scripts/*vllm*.py
+
+# Validate dependencies
+python -c "import torch; print(f'PyTorch: {torch.__version__}')"
+```
+
+**Post-Installation Validation:**
+```bash
+# Run comprehensive validation
+python scripts/test_vllm_installation.py
+
+# Quick health check
+curl http://localhost:8000/health
+
+# Model loading test
+python scripts/test_vllm_client.py --model microsoft/DialoGPT-medium
+```
 
 ---
 

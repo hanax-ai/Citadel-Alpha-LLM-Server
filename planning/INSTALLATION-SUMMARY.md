@@ -12,24 +12,24 @@ Plan B provides a comprehensive, production-ready installation approach for Cita
 ## Deployment Context
 
 **Target Environment**: Hana-X Lab
-**Target Server**: db.hana-x-lab (192.168.10.35)
+**Target Server**: LLM Server (192.168.10.29)
 **User Account**: agent0 (standardized across all services)
 **Network Environment**: Hana-X Lab internal network (192.168.10.0/24)
 **HF Authentication**: Pre-configured token integration
 
-### Server Specifications (db - 192.168.10.35)
+### Server Specifications (LLM Server - 192.168.10.29)
 - **Hardware**: Dell Precision 3630 Tower
 - **Operating System**: Ubuntu 24.04.2 LTS
 - **Kernel**: Linux 6.11.0-26-generic
 - **Architecture**: x86-64
 - **Network Interface**: eno1 (a4:bb:6d:49:ef:d5)
-- **Role**: PostgreSQL Database Server (repurposed for AI workloads)
+- **Role**: LLM Server (AI workloads and model inference)
 
 ### Network Integration
 - **Primary Network**: 192.168.10.0/24
 - **Gateway Access**: Standard Hana-X Lab routing
 - **Service Ports**: 11400-11500 (model services)
-- **Monitoring**: Integration with dev-ops node (192.168.10.36)
+- **Monitoring**: Integrated monitoring and health checks
 
 ## Key Improvements Over Original Plan
 
@@ -248,10 +248,10 @@ citadel logs monitor
 ## Production Deployment Notes
 
 ### Security Considerations
-- **Firewall Configuration**: Model API ports (11400-11500) for Hana-X Lab network
+- **Firewall Configuration**: Model API ports (11400-11500) for LLM Server access
 - **SSH Authentication**: Key-based authentication for agent0 user
 - **Service Isolation**: User isolation with agent0 account and proper permissions
-- **Network Security**: Hana-X Lab internal network (192.168.10.0/24) access controls
+- **Network Security**: LLM Server network access controls (192.168.10.29)
 - **HF Token Security**: Secure token storage and rotation procedures
 - **Regular Updates**: Security patching and system updates
 

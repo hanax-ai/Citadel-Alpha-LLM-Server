@@ -21,7 +21,7 @@ Token: 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
 
 ### Hana-X Lab Server Environment
 ```
-Current Server: db (192.168.10.35) - PostgreSQL Database Server
+Current Server: llm (192.168.10.29) - LLM Server
 Network: 192.168.10.0/24
 Operating System: Ubuntu 24.04.2 LTS
 Kernel: Linux 6.11.0-26-generic
@@ -38,7 +38,7 @@ Hardware: Dell Precision 3630 Tower
 192.168.10.31    orca                # Agent Simulation & Orchestration Node
 192.168.10.34    qa                  # QA/Test Server
 192.168.10.36    dev-ops             # CI/CD + Monitoring Node
-192.168.10.35    db                  # PostgreSQL Database Server (current node)
+192.168.10.29    llm                 # LLM Server (current node)
 192.168.10.19    agent0              # Agent Workstation (Desktop)
 ```
 
@@ -59,7 +59,7 @@ Hardware: Dell Precision 3630 Tower
 ## Deployment Environment
 
 **Target Environment**: Hana-X Lab  
-**Target Server**: db (192.168.10.35) - PostgreSQL Database Server  
+**Target Server**: llm (192.168.10.29) - LLM Server
 **Network**: 192.168.10.0/24  
 **User Account**: agent0  
 **Operating System**: Ubuntu Server 24.04 LTS  
@@ -72,7 +72,7 @@ Hardware: Dell Precision 3630 Tower
 - orca (192.168.10.31) - Agent Simulation & Orchestration Node
 - qa (192.168.10.34) - QA/Test Server
 - dev-ops (192.168.10.36) - CI/CD + Monitoring Node
-- **db (192.168.10.35) - PostgreSQL Database Server (Target Installation)**
+- **llm (192.168.10.29) - LLM Server (Target Installation)**
 - agent0 (192.168.10.19) - Agent Workstation
 ```
 
@@ -87,7 +87,7 @@ Hardware: Dell Precision 3630 Tower
 **Key Additions:**
 ```markdown
 ### Deployment Context
-- **Target Server**: db.hana-x-lab (192.168.10.35)
+- **Target Server**: llm.hana-x-lab (192.168.10.29)
 - **User Account**: agent0 (standardized across all services)
 - **Network Environment**: Hana-X Lab internal network
 - **HF Authentication**: Pre-configured token integration
@@ -112,9 +112,9 @@ Hardware: Dell Precision 3630 Tower
 ```bash
 # User Configuration
 - **User**: agent0
-- **Server name**: db
+- **Server name**: llm
 - **Username**: agent0
-- **Hostname**: db (consistent with Hana-X Lab naming)
+- **Hostname**: llm (consistent with Hana-X Lab naming)
 
 # Network Configuration
 sudo tee -a /etc/hosts << 'EOF'
@@ -127,7 +127,7 @@ sudo tee -a /etc/hosts << 'EOF'
 192.168.10.31    orca                # Agent Simulation & Orchestration Node
 192.168.10.34    qa                  # QA/Test Server
 192.168.10.36    dev-ops             # CI/CD + Monitoring Node
-192.168.10.35    db                  # PostgreSQL Database Server (current node)
+192.168.10.29    llm                 # LLM Server (current node)
 192.168.10.19    agent0              # Agent Workstation
 EOF
 ```
@@ -236,8 +236,8 @@ HF_HOME=/mnt/citadel-models/cache
 TRANSFORMERS_CACHE=/mnt/citadel-models/cache/transformers
 
 # Network configuration (Hana-X Lab)
-CITADEL_BIND_ADDRESS=192.168.10.35
-CITADEL_HOSTNAME=db
+CITADEL_BIND_ADDRESS=192.168.10.29
+CITADEL_HOSTNAME=llm
 EOF
 
 # Update service user references
@@ -305,8 +305,8 @@ create 644 agent0 agent0
 
 ### Network Configuration
 - Add Hana-X Lab network mappings
-- Add `CITADEL_BIND_ADDRESS=192.168.10.35`
-- Add `CITADEL_HOSTNAME=db`
+- Add `CITADEL_BIND_ADDRESS=192.168.10.29`
+- Add `CITADEL_HOSTNAME=llm`
 
 ## Validation Checklist
 
@@ -409,7 +409,7 @@ After implementation, verify:
 
 ### 🎉 **PLAN B DOCUMENTATION UPDATE: COMPLETE**
 
-The comprehensive Plan B installation guide has been successfully customized for the Hana-X Lab deployment environment with standardized user accounts and integrated authentication. All documentation is now ready for production deployment on the db server (192.168.10.35).
+The comprehensive Plan B installation guide has been successfully customized for the Hana-X Lab deployment environment with standardized user accounts and integrated authentication. All documentation is now ready for production deployment on the llm server (192.168.10.29).
 
 **Final Status**: ✅ **DEPLOYMENT READY**
 **Next Step**: Deploy using the updated Plan B guide

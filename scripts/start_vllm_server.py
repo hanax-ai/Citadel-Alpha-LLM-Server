@@ -1,0 +1,65 @@
+#!/usr/bin/env python3
+"""
+PLANB-05: vLLM Server Startup Script
+Simple vLLM server for testing and development
+"""
+
+import argparse
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+def start_vllm_server(model_path, port=8000, host="0.0.0.0"):
+    """Start vLLM OpenAI-compatible API server"""
+    
+    if not Path(model_path).exists():
+        print(f"❌ Model path not found: {model_path}")
+        return False
+    
+    cmd = [
+        "python", "-m", "vllm.entrypoints.openai.api_server",
+        "--model", model_path,
+        "--host", host,
+        "--port", str(port),
+        "--tensor-parallel-size", "1",
+        "--gpu-memory-utilization", "0.7",
+        "--trust-remote-code"
+    ]
+    
+    print(f"🚀 Starting vLLM server...")
+    print(f"   Model: {model_path}")
+    print(f"   Host: {host}")
+    print(f"   Port: {port}")
+    print(f"   Command: {' '.join(cmd)}")
+    
+    try:
+        process = subprocess.Popen(cmd)
+        print(f"✅ Server started with PID: {process.pid}")
+        print(f"🌐 API will be available at: http://{host}:{port}")
+        print("📚 API docs at: http://localhost:8000/docs")
+        
+        # Wait for process
+        process.wait()
+        
+    except KeyboardInterrupt:
+        print("\n🛑 Server stopped by user")
+        process.terminate()
+    except Exception as e:
+        print(f"❌ Server failed: {e}")
+        return False
+    
+    return True
+
+def main():
+    parser = argparse.ArgumentParser(description="Start vLLM server")
+    parser.add_argument("model_path", help="Path to model directory")
+    parser.add_argument("--port", type=int, default=8000, help="Server port")
+    parser.add_argument("--host", default="0.0.0.0", help="Server host")
+    
+    args = parser.parse_args()
+    
+    return start_vllm_server(args.model_path, args.port, args.host)
+
+if __name__ == "__main__":
+    sys.exit(0 if main() else 1)
