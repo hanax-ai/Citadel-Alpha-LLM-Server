@@ -34,31 +34,59 @@ def start_vllm_server(model_path, port=8000, host="0.0.0.0"):
     print(f"   Command: {' '.join(cmd)}")
     
     try:
-        process = subprocess.Popen(cmd)
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1
+        )
         print(f"✅ Server started with PID: {process.pid}")
         print(f"🌐 API will be available at: http://{host}:{port}")
-        print("📚 API docs at: http://localhost:8000/docs")
-        
-        # Wait for process
-        process.wait()
-        
-    except KeyboardInterrupt:
-        print("\n🛑 Server stopped by user")
-        process.terminate()
+        print(f"📚 API docs at: http://localhost:{port}/docs")
+
+        # Stream and print server output in real time
+        try:
+            while True:
+                output = process.stdout.readline()
+                if output:
+                    print(f"[vLLM STDOUT] {output}", end="")
+                err = process.stderr.readline()
+                if err:
+                    print(f"[vLLM STDERR] {err}", end="")
+                if output == '' and err == '' and process.poll() is not None:
+                    break
+        except KeyboardInterrupt:
+            print("\n🛑 Server stopped by user")
+            process.terminate()
+            return False
+
+        rc = process.poll()
+        if rc != 0:
+            print(f"❌ Server exited with code {rc}")
+            return False
+        return True
     except Exception as e:
         print(f"❌ Server failed: {e}")
         return False
-    
-    return True
 
 def main():
+    def valid_port(value):
+        try:
+            port = int(value)
+        except ValueError:
+            raise argparse.ArgumentTypeError(f"Port must be an integer, got '{value}'")
+        if not (1 <= port <= 65535):
+            raise argparse.ArgumentTypeError(f"Port must be between 1 and 65535, got {port}")
+        return port
+
     parser = argparse.ArgumentParser(description="Start vLLM server")
     parser.add_argument("model_path", help="Path to model directory")
-    parser.add_argument("--port", type=int, default=8000, help="Server port")
+    parser.add_argument("--port", type=valid_port, default=8000, help="Server port (1-65535)")
     parser.add_argument("--host", default="0.0.0.0", help="Server host")
-    
+
     args = parser.parse_args()
-    
+
     return start_vllm_server(args.model_path, args.port, args.host)
 
 if __name__ == "__main__":

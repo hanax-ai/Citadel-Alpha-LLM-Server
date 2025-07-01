@@ -4,6 +4,8 @@ PLANB-05: vLLM Client Test Script
 Test vLLM server with OpenAI-compatible client
 """
 
+
+import sys
 import requests
 import json
 import time

@@ -23,7 +23,10 @@ from typing import Dict, List, Tuple, Optional
 class PLANB05PreInstallValidator:
     """Pre-installation validation for PLANB-05 vLLM setup."""
     
-    def __init__(self, base_dir: str = "/home/agent0/Citadel-Alpha-LLM-Server-1"):
+    def __init__(self, base_dir: str = None):
+        # Allow base_dir to be set via environment variable, fallback to default if not set
+        if base_dir is None:
+            base_dir = os.getenv("PLANB05_BASE_DIR", "/home/agent0/Citadel-Alpha-LLM-Server-1")
         self.base_dir = Path(base_dir)
         self.scripts_dir = self.base_dir / "scripts"
         self.validation_results: Dict[str, bool] = {}
@@ -90,11 +93,15 @@ class PLANB05PreInstallValidator:
             print(f"❌ Python 3.12+ required, found {sys.version}")
             return False
         
-        # Check if in virtual environment
-        if not hasattr(sys, 'real_prefix') and not (
-            hasattr(sys, 'base_prefix') and sys.base_prefix != sys.prefix
-        ):
-            print("⚠️  Not in virtual environment")
+        # Robust check for virtual environment (supports venv, virtualenv, conda)
+        in_venv = (
+            hasattr(sys, 'real_prefix') or
+            (hasattr(sys, 'base_prefix') and sys.base_prefix != sys.prefix) or
+            os.environ.get('VIRTUAL_ENV') is not None or
+            (os.environ.get('CONDA_DEFAULT_ENV') is not None)
+        )
+        if not in_venv:
+            print("⚠️  Not in a recognized virtual environment (venv, virtualenv, or conda)")
             print("   Activate: source /opt/citadel/dev-env/bin/activate")
             return False
         

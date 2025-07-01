@@ -10,7 +10,7 @@
 
 Citadel AI OS Plan B establishes a production-ready **Large Language Model (LLM) inference server** optimized for:
 - High-performance model serving with vLLM framework
-- Multi-GPU acceleration (RTX 4070 Ti SUPER)
+- Multi-GPU acceleration (RTX 4070 Ti SUPER, 16GB VRAM)
 - Enterprise-grade reliability and monitoring
 - Integration with Hana-X Lab AI infrastructure ecosystem
 
@@ -54,11 +54,11 @@ Network Layout (192.168.10.0/24):
 - **Kernel**: Linux 6.11.0-26-generic
 - **Architecture**: x86-64
 - **Network Interface**: eno1 (192.168.10.36/24)
-- **GPU**: RTX 4070 Ti SUPER (32GB VRAM)
+- **GPU**: RTX 4070 Ti SUPER (16GB VRAM)
 - **RAM**: 128GB (Large context processing and multi-model serving)
 
 ### Hardware Optimization Rationale
-- **32GB VRAM (RTX 4070 Ti SUPER)**: Enables serving 34B parameter models
+- **16GB VRAM (RTX 4070 Ti SUPER)**: Supports efficient serving of 7B–13B parameter models; larger models may require model sharding or a GPU with more VRAM (24–48GB recommended for 34B models)
 - **3.6TB NVMe Model Storage**: Fast model loading and caching
 - **128GB RAM**: Large context processing and multi-model serving
 
@@ -91,7 +91,7 @@ Device Map:
 
 ### Service Architecture
 - **vLLM Framework**: Latest version (0.6.1+) with enhanced performance
-- **GPU Acceleration**: Optimized for RTX 4070 Ti SUPER
+- **GPU Acceleration**: Optimized for RTX 4070 Ti SUPER (16GB VRAM)
 - **Environment Integration**: Uses `/opt/citadel/dev-env` per Plan B standards
 - **Authentication**: Integrated Hugging Face token management
 
@@ -119,7 +119,7 @@ The vLLM implementation package has been **thoroughly reviewed and validated** w
 
 - ✅ **LLM Optimization**: Dedicated vLLM 0.6.1+ with Python 3.12 compatibility resolution
 - ✅ **Storage Optimization**: 3.6TB NVMe SSD for models with symlink integration
-- ✅ **GPU Acceleration**: RTX 4070 Ti SUPER optimization for 34B parameter models
+- ✅ **GPU Acceleration**: RTX 4070 Ti SUPER optimization for 7B–13B parameter models (for 34B+ models, use a GPU with 24–48GB VRAM)
 - ✅ **OS Modernization**: Ubuntu Server 24.04 with latest security updates
 - ✅ **Python Upgrade**: Python 3.12 for enhanced performance and vLLM compatibility
 - ✅ **Driver Update**: NVIDIA 570.x for latest GPU optimizations

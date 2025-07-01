@@ -78,8 +78,8 @@ def test_vllm_engine():
         
         console.print("🧪 Testing vLLM engine with small model...")
         
-        # Use a small model for testing
-        model_name = "facebook/opt-125m"
+        # Use a small model for testing, configurable via environment variable
+        model_name = os.environ.get("VLLM_TEST_MODEL", "facebook/opt-125m")
         
         # Initialize LLM
         llm = LLM(

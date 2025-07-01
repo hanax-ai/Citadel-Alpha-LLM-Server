@@ -106,7 +106,7 @@ The following scripts have been created and are available in the [`/scripts/`](.
 
 2. **Check Script Permissions**
    ```bash
-   chmod +x scripts/*.sh scripts/*.py
+   chmod +x scripts/*.sh
    ```
 
 ### Phase 2: Execute Installation

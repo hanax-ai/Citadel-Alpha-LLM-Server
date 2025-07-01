@@ -136,17 +136,24 @@ configure_compilation_environment() {
     export TORCH_CUDA_ARCH_LIST="8.9"  # For RTX 4070 Ti SUPER
     export MAX_JOBS=8  # Limit parallel compilation to prevent OOM
     
-    # Add to shell profile for persistence
-    tee -a ~/.bashrc << 'EOF'
-
-# vLLM Compilation Environment
+    # Add to shell profile for persistence, avoiding duplication
+    SENTINEL="# >>> vLLM Compilation Environment >>>"
+    END_SENTINEL="# <<< vLLM Compilation Environment <<<"
+    BLOCK="${SENTINEL}
 export CC=gcc-11
 export CXX=g++-11
 export NVCC_PREPEND_FLAGS='-ccbin /usr/bin/gcc-11'
-export TORCH_CUDA_ARCH_LIST="8.9"
+export TORCH_CUDA_ARCH_LIST=\"8.9\"
 export MAX_JOBS=8
-EOF
-    
+${END_SENTINEL}"
+
+    # Remove any existing block
+    if grep -q "$SENTINEL" ~/.bashrc; then
+        sed -i "/$SENTINEL/,/$END_SENTINEL/d" ~/.bashrc
+    fi
+    # Append the block
+    echo -e "$BLOCK" >> ~/.bashrc
+
     source ~/.bashrc
     
     log_success "Compilation environment configured"

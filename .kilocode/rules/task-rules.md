@@ -24,9 +24,11 @@ Read this before executing any task. It ensures structured, safe, and verifiable
 - **Rule of Thumb for Class Size:**
   - **100–300 lines per class** is optimal for readability, testing, and reusability.
   - If a class grows **over 500 lines**, it likely needs to be split into logical components or helpers.
-- **Never hardcode configuration.** Always use:
-  - `.env` for environment variables
-  - `config.json` or `config.yaml` files in `/configs/` for structured config
+- **Never hardcode configuration.** Always use one of the following supported methods for loading configuration:
+  - Use the `dotenv` package to load environment variables from a `.env` file.
+  - Use a pydantic-based settings class for configuration validation and management.
+  - For structured config, load `config.json` or `config.yaml` files from `/configs/` into Python dataclasses or pydantic models.
+  This ensures all configuration is centralized, validated, and managed in a consistent, testable way across the project.
 - **Use relative imports** and group code by clear functional boundaries (models, services, utilities, etc.).
 
 ---
@@ -34,7 +36,7 @@ Read this before executing any task. It ensures structured, safe, and verifiable
 ## 🧪 Testing & Reliability
 
 - **Capture all validation results** in a dedicated task result file.
-- Place test logic in `/validation/` or add new ones when needed.
+- Place all test code in the canonical `tests/` directory. Use semantic tags, labels, or naming conventions (e.g., `test_validation_*.py`) to categorize tests (such as "validation" or "integration") instead of creating separate directories like `/validation/`.
 - All tests must be:
   - Isolated and deterministic
   - Lightweight and easy to re-run
