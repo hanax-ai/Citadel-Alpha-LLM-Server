@@ -76,11 +76,25 @@ echo "=== Storage Device Detection ==="
 NVME_MODEL_DEVICE=""
 BACKUP_DEVICE=""
 
-# Find secondary NVMe device (not the boot device)
+# Find secondary NVMe device (not the boot device or LVM physical volume)
+PRIMARY_UUIDS=$(awk '/\/mnt\/citadel-models|\/mnt\/citadel-backup|\/ / {print $1}' /etc/fstab | grep -o 'UUID=[^ ]*' | cut -d'=' -f2)
 for device in /dev/nvme*n1; do
-    if [ -b "$device" ] && ! mount | grep -q "$device"; then
-        # Check if it's not the boot device
-        if ! lsblk "$device" | grep -q "/boot\|/$"; then
+    if [ -b "$device" ]; then
+        # Check if any partition of this device is mounted as / or /boot or is a PV for LVM root
+        skip_device=false
+        for part in $(ls ${device}p* 2>/dev/null); do
+            if mount | grep -q "$part"; then
+                skip_device=true
+                break
+            fi
+            # Check if partition UUID matches any primary UUID in fstab
+            part_uuid=$(blkid -s UUID -o value "$part" 2>/dev/null)
+            if echo "$PRIMARY_UUIDS" | grep -qw "$part_uuid"; then
+                skip_device=true
+                break
+            fi
+        done
+        if ! $skip_device; then
             NVME_MODEL_DEVICE="$device"
             break
         fi
@@ -303,17 +317,22 @@ mount | grep -E "(citadel|nvme|sd[a-z])"
 
 3. **File System Optimization**
    ```bash
-   # Configure ext4 optimization for model storage (using detected device)
-   if sudo tune2fs -o journal_data_writeback "$NVME_MODEL_DEVICE"; then
-       echo "✅ Configured writeback journaling for model storage"
+   # Configure ext4 optimization for model storage (using correct partition device)
+   MODEL_PARTITION_DEVICE=$(findmnt -nro SOURCE --target /mnt/citadel-models)
+   if [ -z "$MODEL_PARTITION_DEVICE" ]; then
+       echo "ERROR: Could not determine partition device for /mnt/citadel-models"
    else
-       echo "WARNING: Could not configure writeback journaling"
-   fi
+       if sudo tune2fs -o journal_data_writeback "$MODEL_PARTITION_DEVICE"; then
+           echo "✅ Configured writeback journaling for model storage ($MODEL_PARTITION_DEVICE)"
+       else
+           echo "WARNING: Could not configure writeback journaling on $MODEL_PARTITION_DEVICE"
+       fi
    
-   if sudo tune2fs -O ^has_journal "$NVME_MODEL_DEVICE"; then
-       echo "✅ Disabled journaling for maximum performance"
-   else
-       echo "WARNING: Could not disable journaling"
+       if sudo tune2fs -O ^has_journal "$MODEL_PARTITION_DEVICE"; then
+           echo "✅ Disabled journaling for maximum performance ($MODEL_PARTITION_DEVICE)"
+       else
+           echo "WARNING: Could not disable journaling on $MODEL_PARTITION_DEVICE"
+       fi
    fi
    
    # Note: This removes journaling for maximum performance

@@ -47,9 +47,152 @@ dependency_chain:
     - after: citadel-models.target
 ```
 
+## Prerequisites Validation
+
+Before starting service configuration, validate all dependencies and prerequisites:
+
+### Step 0: Validate System Prerequisites
+
+1. **Validate Core Dependencies**
+   ```bash
+   # Create prerequisite validation script
+   tee /opt/citadel/scripts/validate-prerequisites.sh << 'EOF'
+   #!/bin/bash
+   # validate-prerequisites.sh - Validate all prerequisites before service setup
+   
+   set -euo pipefail
+   
+   echo "=== Citadel AI Prerequisites Validation ==="
+   
+   # Track validation status
+   VALIDATION_PASSED=true
+   
+   # Function to check and report status
+   check_requirement() {
+       local description="$1"
+       local command="$2"
+       local required="${3:-true}"
+       
+       if eval "$command" > /dev/null 2>&1; then
+           echo "✅ $description"
+           return 0
+       else
+           if [ "$required" = "true" ]; then
+               echo "❌ $description (REQUIRED)"
+               VALIDATION_PASSED=false
+           else
+               echo "⚠️  $description (OPTIONAL)"
+           fi
+           return 1
+       fi
+   }
+   
+   echo ""
+   echo "System Dependencies:"
+   check_requirement "Ubuntu 24.04 LTS" "grep -q 'Ubuntu 24.04' /etc/os-release"
+   check_requirement "Systemd available" "systemctl --version"
+   check_requirement "NVIDIA drivers installed" "nvidia-smi"
+   check_requirement "NVIDIA persistence daemon" "systemctl status nvidia-persistenced --no-pager"
+   check_requirement "Python 3.12 available" "python3.12 --version"
+   
+   echo ""
+   echo "Storage Requirements:"
+   check_requirement "Models storage mounted" "mountpoint -q /mnt/citadel-models"
+   check_requirement "Backup storage mounted" "mountpoint -q /mnt/citadel-backup"
+   check_requirement "Models symlink exists" "[ -L /opt/citadel/models ]"
+   check_requirement "Sufficient storage space (>500GB)" "[ $(df /mnt/citadel-models --output=avail | tail -1) -gt 524288000 ]"
+   
+   echo ""
+   echo "Python Environment:"
+   check_requirement "vLLM virtual environment" "[ -d /opt/citadel/vllm-env ]"
+   check_requirement "vLLM installed" "source /opt/citadel/vllm-env/bin/activate && python -c 'import vllm'"
+   check_requirement "Required Python packages" "source /opt/citadel/vllm-env/bin/activate && python -c 'import torch, transformers, huggingface_hub'"
+   
+   echo ""
+   echo "Network Configuration:"
+   check_requirement "Network interface available" "ip addr show | grep -q '192.168.10.35'"
+   check_requirement "Required ports available" "! netstat -tuln | grep -E ':(11400|11401|11402|11403|11404|11405|11500)'"
+   
+   echo ""
+   echo "Permissions and Security:"
+   check_requirement "Agent0 user exists" "id agent0"
+   check_requirement "Citadel directories writable" "[ -w /opt/citadel ]"
+   check_requirement "Systemd user permissions" "systemctl --user status > /dev/null 2>&1" false
+   
+   echo ""
+   if [ "$VALIDATION_PASSED" = "true" ]; then
+       echo "🎉 All prerequisites validated successfully!"
+       echo "System is ready for service configuration."
+       exit 0
+   else
+       echo "❌ Prerequisites validation failed!"
+       echo "Please resolve the above issues before proceeding."
+       exit 1
+   fi
+   EOF
+   
+   chmod +x /opt/citadel/scripts/validate-prerequisites.sh
+   
+   # Run validation
+   echo "Running prerequisites validation..."
+   /opt/citadel/scripts/validate-prerequisites.sh
+   ```
+
+2. **Validate Model Availability**
+   ```bash
+   # Create model validation script
+   tee /opt/citadel/scripts/validate-models.sh << 'EOF'
+   #!/bin/bash
+   # validate-models.sh - Validate model availability and readiness
+   
+   set -euo pipefail
+   
+   echo "=== Model Validation ==="
+   
+   # Model paths to validate
+   declare -A MODELS=(
+       ["mixtral"]="/opt/citadel/models/mixtral-8x7b-instruct"
+       ["yi34b"]="/opt/citadel/models/yi-34b-chat"
+       ["hermes"]="/opt/citadel/models/nous-hermes-2-mixtral"
+       ["openchat"]="/opt/citadel/models/openchat-3.5"
+       ["phi3"]="/opt/citadel/models/phi-3-mini-128k"
+       ["coder"]="/opt/citadel/models/deepcoder-14b-instruct"
+       ["vision"]="/opt/citadel/models/mimo-vl-7b-rl"
+   )
+   
+   MODELS_AVAILABLE=0
+   MODELS_TOTAL=${#MODELS[@]}
+   
+   for model_name in "${!MODELS[@]}"; do
+       model_path="${MODELS[$model_name]}"
+       
+       if [ -d "$model_path" ] && [ -f "$model_path/config.json" ]; then
+           echo "✅ $model_name: Available at $model_path"
+           ((MODELS_AVAILABLE++))
+       else
+           echo "❌ $model_name: Not found at $model_path"
+       fi
+   done
+   
+   echo ""
+   echo "Models Summary: $MODELS_AVAILABLE/$MODELS_TOTAL available"
+   
+   if [ $MODELS_AVAILABLE -eq 0 ]; then
+       echo "❌ No models available! Services cannot be started."
+       exit 1
+   elif [ $MODELS_AVAILABLE -lt $MODELS_TOTAL ]; then
+       echo "⚠️  Some models unavailable. Services will be created for available models only."
+   else
+       echo "🎉 All models validated successfully!"
+   fi
+   EOF
+   
+   chmod +x /opt/citadel/scripts/validate-models.sh
+   ```
+
 ## Service Configuration Steps
 
-### Step 1: Create Base Service Infrastructure
+### Step 1: Create Base Service Infrastructure (with Prerequisites)
 
 1. **Create Service Configuration Directory**
    ```bash
@@ -804,6 +947,603 @@ dependency_chain:
    
    echo "All services enabled for auto-start"
    ```
+## Incremental Testing Strategy
+
+### Step 1: Phased Service Deployment
+
+1. **Create Incremental Deployment Script**
+   ```bash
+   # Create phased deployment script
+   tee /opt/citadel/scripts/deploy-services.sh << 'EOF'
+   #!/bin/bash
+   # deploy-services.sh - Incremental service deployment with testing
+   
+   set -euo pipefail
+   
+   show_usage() {
+       cat << 'USAGE'
+   Incremental Service Deployment
+   
+   Usage: deploy-services.sh <phase> [options]
+   
+   Phases:
+     validate     - Run prerequisites validation
+     phase1       - Deploy infrastructure services (storage, gpu)
+     phase2       - Deploy single test model service
+     phase3       - Deploy remaining model services
+     phase4       - Deploy monitoring services
+     rollback     - Rollback all services
+     status       - Show deployment status
+   
+   Options:
+     --force      - Skip confirmation prompts
+     --test-model - Specify test model for phase2 (default: phi3)
+   USAGE
+   }
+   
+   validate_phase() {
+       echo "=== Phase Validation ==="
+       /opt/citadel/scripts/validate-prerequisites.sh
+       /opt/citadel/scripts/validate-models.sh
+   }
+   
+   deploy_phase1() {
+       echo "=== Phase 1: Infrastructure Services ==="
+       
+       # Reload systemd
+       sudo systemctl daemon-reload
+       
+       # Deploy infrastructure services
+       echo "Deploying storage service..."
+       sudo systemctl enable citadel-storage.service
+       sudo systemctl start citadel-storage.service
+       
+       echo "Waiting for storage service..."
+       sleep 10
+       
+       if ! systemctl is-active --quiet citadel-storage.service; then
+           echo "❌ Storage service failed to start"
+           exit 1
+       fi
+       
+       echo "Deploying GPU service..."
+       sudo systemctl enable citadel-gpu.service
+       sudo systemctl start citadel-gpu.service
+       
+       echo "Waiting for GPU service..."
+       sleep 5
+       
+       if ! systemctl is-active --quiet citadel-gpu.service; then
+           echo "❌ GPU service failed to start"
+           exit 1
+       fi
+       
+       echo "✅ Phase 1 completed successfully"
+   }
+   
+   deploy_phase2() {
+       local test_model="${1:-phi3}"
+       
+       echo "=== Phase 2: Test Model Service ==="
+       echo "Deploying test model: $test_model"
+       
+       # Deploy single model for testing
+       sudo systemctl enable "citadel-$test_model.service"
+       sudo systemctl start "citadel-$test_model.service"
+       
+       echo "Waiting for model service to start..."
+       sleep 30
+       
+       if ! systemctl is-active --quiet "citadel-$test_model.service"; then
+           echo "❌ Test model service failed to start"
+           exit 1
+       fi
+       
+       # Test model endpoint
+       local port
+       case "$test_model" in
+           phi3) port=11403 ;;
+           openchat) port=11402 ;;
+           *) port=11400 ;;
+       esac
+       
+       echo "Testing model endpoint..."
+       if curl -s "http://localhost:$port/health" > /dev/null; then
+           echo "✅ Phase 2 completed successfully"
+       else
+           echo "❌ Model endpoint test failed"
+           exit 1
+       fi
+   }
+   
+   deploy_phase3() {
+       echo "=== Phase 3: Remaining Model Services ==="
+       
+       # Deploy models target
+       sudo systemctl enable citadel-models.target
+       
+       # Deploy remaining model services
+       models=("mixtral" "yi34b" "hermes" "openchat" "coder" "vision")
+       for model in "${models[@]}"; do
+           if systemctl is-active --quiet "citadel-$model.service"; then
+               echo "Skipping $model (already active)"
+               continue
+           fi
+           
+           echo "Deploying $model service..."
+           sudo systemctl enable "citadel-$model.service"
+           sudo systemctl start "citadel-$model.service"
+           
+           echo "Waiting for $model to start..."
+           sleep 20
+           
+           if ! systemctl is-active --quiet "citadel-$model.service"; then
+               echo "⚠️  $model service failed to start (continuing)"
+           else
+               echo "✅ $model service started"
+           fi
+       done
+       
+       echo "✅ Phase 3 completed"
+   }
+   
+   deploy_phase4() {
+       echo "=== Phase 4: Monitoring Services ==="
+       
+       # Deploy monitoring service
+       sudo systemctl enable citadel-monitor.service
+       sudo systemctl start citadel-monitor.service
+       
+       echo "Waiting for monitor service..."
+       sleep 10
+       
+       if ! systemctl is-active --quiet citadel-monitor.service; then
+           echo "❌ Monitor service failed to start"
+           exit 1
+       fi
+       
+       # Deploy main target
+       sudo systemctl enable citadel-ai.target
+       sudo systemctl start citadel-ai.target
+       
+       echo "✅ Phase 4 completed successfully"
+       echo "🎉 Full deployment completed!"
+   }
+   
+   rollback_services() {
+       echo "=== Rolling Back Services ==="
+       
+       # Stop and disable all services
+       services=("citadel-ai.target" "citadel-monitor.service" "citadel-models.target")
+       models=("mixtral" "yi34b" "hermes" "openchat" "phi3" "coder" "vision")
+       
+       for model in "${models[@]}"; do
+           services+=("citadel-$model.service")
+       done
+       
+       services+=("citadel-gpu.service" "citadel-storage.service")
+       
+       for service in "${services[@]}"; do
+           echo "Stopping $service..."
+           sudo systemctl stop "$service" 2>/dev/null || true
+           sudo systemctl disable "$service" 2>/dev/null || true
+       done
+       
+       echo "✅ Rollback completed"
+   }
+   
+   show_status() {
+       echo "=== Deployment Status ==="
+       /opt/citadel/scripts/citadel-service.sh health
+   }
+   
+   # Main execution
+   phase="${1:-}"
+   
+   if [ -z "$phase" ]; then
+       show_usage
+       exit 1
+   fi
+   
+   case "$phase" in
+       validate)
+           validate_phase
+           ;;
+       phase1)
+           validate_phase
+           deploy_phase1
+           ;;
+       phase2)
+           deploy_phase2 "${2:-phi3}"
+           ;;
+       phase3)
+           deploy_phase3
+           ;;
+       phase4)
+           deploy_phase4
+           ;;
+       rollback)
+           rollback_services
+           ;;
+       status)
+           show_status
+           ;;
+       help|--help|-h)
+           show_usage
+           ;;
+       *)
+           echo "Unknown phase: $phase"
+           show_usage
+           exit 1
+           ;;
+   esac
+   EOF
+   
+   chmod +x /opt/citadel/scripts/deploy-services.sh
+   
+   # Create convenient alias
+   sudo ln -sf /opt/citadel/scripts/deploy-services.sh /usr/local/bin/citadel-deploy
+   ```
+
+## Rollback Strategy
+
+### Step 1: Create Rollback Infrastructure
+
+1. **Create Service Rollback Script**
+   ```bash
+   # Create comprehensive rollback script
+   tee /opt/citadel/scripts/rollback-services.sh << 'EOF'
+   #!/bin/bash
+   # rollback-services.sh - Emergency rollback for Citadel AI services
+   
+   set -euo pipefail
+   
+   show_usage() {
+       cat << 'USAGE'
+   Citadel AI Service Rollback
+   
+   Usage: rollback-services.sh <action> [options]
+   
+   Actions:
+     emergency    - Immediate stop of all services
+     graceful     - Graceful shutdown with health checks
+     partial      - Rollback specific service group
+     backup       - Create service configuration backup
+     restore      - Restore from backup
+     status       - Show rollback status
+   
+   Options:
+     --group      - Service group (models, infrastructure, monitoring)
+     --force      - Skip confirmation prompts
+     --backup-id  - Backup identifier for restore
+   USAGE
+   }
+   
+   emergency_rollback() {
+       echo "=== EMERGENCY ROLLBACK ==="
+       echo "⚠️  Performing immediate service shutdown..."
+       
+       # Kill all vLLM processes immediately
+       pkill -9 -f "vllm.entrypoints.openai.api_server" || true
+       
+       # Stop all Citadel services
+       sudo systemctl stop citadel-ai.target || true
+       
+       # Stop individual services
+       services=("citadel-monitor.service" "citadel-models.target")
+       models=("mixtral" "yi34b" "hermes" "openchat" "phi3" "coder" "vision")
+       
+       for model in "${models[@]}"; do
+           sudo systemctl stop "citadel-$model.service" || true
+       done
+       
+       sudo systemctl stop citadel-gpu.service || true
+       sudo systemctl stop citadel-storage.service || true
+       
+       echo "✅ Emergency rollback completed"
+   }
+   
+   graceful_rollback() {
+       echo "=== GRACEFUL ROLLBACK ==="
+       
+       # Gracefully stop services in reverse order
+       echo "Stopping main target..."
+       sudo systemctl stop citadel-ai.target || true
+       
+       echo "Stopping monitoring..."
+       sudo systemctl stop citadel-monitor.service || true
+       
+       echo "Stopping model services..."
+       models=("vision" "coder" "phi3" "openchat" "hermes" "yi34b" "mixtral")
+       for model in "${models[@]}"; do
+           if systemctl is-active --quiet "citadel-$model.service"; then
+               echo "  Stopping $model..."
+               sudo systemctl stop "citadel-$model.service"
+               sleep 5
+           fi
+       done
+       
+       echo "Stopping models target..."
+       sudo systemctl stop citadel-models.target || true
+       
+       echo "Stopping infrastructure services..."
+       sudo systemctl stop citadel-gpu.service || true
+       sudo systemctl stop citadel-storage.service || true
+       
+       echo "✅ Graceful rollback completed"
+   }
+   
+   partial_rollback() {
+       local group="$1"
+       
+       echo "=== PARTIAL ROLLBACK: $group ==="
+       
+       case "$group" in
+           models)
+               models=("mixtral" "yi34b" "hermes" "openchat" "phi3" "coder" "vision")
+               for model in "${models[@]}"; do
+                   echo "Stopping $model..."
+                   sudo systemctl stop "citadel-$model.service" || true
+               done
+               sudo systemctl stop citadel-models.target || true
+               ;;
+           infrastructure)
+               sudo systemctl stop citadel-gpu.service || true
+               sudo systemctl stop citadel-storage.service || true
+               ;;
+           monitoring)
+               sudo systemctl stop citadel-monitor.service || true
+               ;;
+           *)
+               echo "Unknown group: $group"
+               exit 1
+               ;;
+       esac
+       
+       echo "✅ Partial rollback completed"
+   }
+   
+   backup_configuration() {
+       local backup_id="backup-$(date +%Y%m%d-%H%M%S)"
+       local backup_dir="/opt/citadel/backups/services/$backup_id"
+       
+       echo "=== CREATING CONFIGURATION BACKUP ==="
+       echo "Backup ID: $backup_id"
+       
+       mkdir -p "$backup_dir"
+       
+       # Backup systemd service files
+       cp -r /etc/systemd/system/citadel-*.service "$backup_dir/" 2>/dev/null || true
+       cp -r /etc/systemd/system/citadel-*.target "$backup_dir/" 2>/dev/null || true
+       cp /etc/systemd/system/citadel-ai.env "$backup_dir/" 2>/dev/null || true
+       
+       # Backup service scripts
+       cp -r /opt/citadel/services "$backup_dir/" 2>/dev/null || true
+       
+       # Create backup manifest
+       cat > "$backup_dir/manifest.txt" << EOF
+   Citadel AI Service Configuration Backup
+   Created: $(date)
+   Backup ID: $backup_id
+   
+   Contents:
+   - Systemd service files
+   - Service scripts and configurations
+   - Environment configuration
+   EOF
+       
+       echo "✅ Backup created: $backup_dir"
+       echo "$backup_id" > /opt/citadel/backups/services/latest-backup.txt
+   }
+   
+   restore_configuration() {
+       local backup_id="$1"
+       local backup_dir="/opt/citadel/backups/services/$backup_id"
+       
+       if [ ! -d "$backup_dir" ]; then
+           echo "❌ Backup not found: $backup_id"
+           exit 1
+       fi
+       
+       echo "=== RESTORING CONFIGURATION ==="
+       echo "Restoring from: $backup_id"
+       
+       # Stop services first
+       graceful_rollback
+       
+       # Restore files
+       sudo cp "$backup_dir"/citadel-*.service /etc/systemd/system/ 2>/dev/null || true
+       sudo cp "$backup_dir"/citadel-*.target /etc/systemd/system/ 2>/dev/null || true
+       sudo cp "$backup_dir/citadel-ai.env" /etc/systemd/system/ 2>/dev/null || true
+       
+       # Restore service scripts
+       cp -r "$backup_dir/services/"* /opt/citadel/services/ 2>/dev/null || true
+       
+       # Reload systemd
+       sudo systemctl daemon-reload
+       
+       echo "✅ Configuration restored from backup"
+   }
+   
+   # Main execution
+   action="${1:-}"
+   
+   if [ -z "$action" ]; then
+       show_usage
+       exit 1
+   fi
+   
+   case "$action" in
+       emergency)
+           emergency_rollback
+           ;;
+       graceful)
+           graceful_rollback
+           ;;
+       partial)
+           partial_rollback "${2:-models}"
+           ;;
+       backup)
+           backup_configuration
+           ;;
+       restore)
+           restore_configuration "${2:-}"
+           ;;
+       status)
+           /opt/citadel/scripts/citadel-service.sh health
+           ;;
+       help|--help|-h)
+           show_usage
+           ;;
+       *)
+           echo "Unknown action: $action"
+           show_usage
+           exit 1
+           ;;
+   esac
+   EOF
+   
+   chmod +x /opt/citadel/scripts/rollback-services.sh
+   
+   # Create convenient alias
+   sudo ln -sf /opt/citadel/scripts/rollback-services.sh /usr/local/bin/citadel-rollback
+   ```
+
+2. **Create Backup Directory Structure**
+   ```bash
+   # Create backup directory structure
+   mkdir -p /opt/citadel/backups/services
+   mkdir -p /opt/citadel/backups/configs
+   
+   # Set permissions
+   chmod 755 /opt/citadel/backups
+   chown -R agent0:agent0 /opt/citadel/backups
+   ```
+
+## Monitoring Integration Preparation
+
+### Step 1: Prepare for Prometheus/Grafana Integration
+
+1. **Create Monitoring Endpoints**
+   ```bash
+   # Create monitoring preparation script
+   tee /opt/citadel/scripts/prepare-monitoring.sh << 'EOF'
+   #!/bin/bash
+   # prepare-monitoring.sh - Prepare infrastructure for Prometheus/Grafana monitoring
+   
+   set -euo pipefail
+   
+   echo "=== Preparing Monitoring Infrastructure ==="
+   
+   # Create monitoring configuration directory
+   mkdir -p /opt/citadel/monitoring/{prometheus,grafana,exporters}
+   mkdir -p /opt/citadel/monitoring/configs
+   
+   # Create metrics endpoints configuration
+   cat > /opt/citadel/monitoring/configs/endpoints.yaml << 'YAML'
+   # Citadel AI Monitoring Endpoints Configuration
+   # This file will be used by future monitoring tasks
+   
+   prometheus:
+     scrape_configs:
+       - job_name: 'citadel-models'
+         static_configs:
+           - targets:
+             - 'localhost:11400'  # mixtral
+             - 'localhost:11401'  # hermes
+             - 'localhost:11402'  # openchat
+             - 'localhost:11403'  # phi3
+             - 'localhost:11404'  # yi34b
+             - 'localhost:11405'  # coder
+             - 'localhost:11500'  # vision
+         metrics_path: '/metrics'
+         scrape_interval: 15s
+         
+       - job_name: 'citadel-system'
+         static_configs:
+           - targets:
+             - 'localhost:9100'  # node-exporter
+             - 'localhost:9101'  # gpu-exporter
+         scrape_interval: 15s
+         
+   grafana:
+     dashboards:
+       - name: 'citadel-overview'
+         path: '/opt/citadel/monitoring/grafana/dashboards/overview.json'
+       - name: 'citadel-models'
+         path: '/opt/citadel/monitoring/grafana/dashboards/models.json'
+       - name: 'citadel-system'
+         path: '/opt/citadel/monitoring/grafana/dashboards/system.json'
+   YAML
+   
+   # Create monitoring service integration hooks
+   cat > /opt/citadel/scripts/monitoring-hooks.sh << 'HOOKS'
+   #!/bin/bash
+   # monitoring-hooks.sh - Integration hooks for monitoring services
+   
+   # Function to be called by model services to register metrics
+   register_model_metrics() {
+       local model_name="$1"
+       local port="$2"
+       
+       echo "Registering metrics for $model_name on port $port"
+       # This will be implemented in future monitoring tasks
+   }
+   
+   # Function to be called by health monitor to expose metrics
+   expose_health_metrics() {
+       local status="$1"
+       local model_name="$2"
+       
+       echo "Exposing health metrics: $model_name=$status"
+       # This will be implemented in future monitoring tasks
+   }
+   
+   # Function to prepare service discovery for Prometheus
+   prepare_service_discovery() {
+       echo "Preparing service discovery configuration"
+       # This will be implemented in future monitoring tasks
+   }
+   HOOKS
+   
+   chmod +x /opt/citadel/scripts/monitoring-hooks.sh
+   
+   # Create placeholder for monitoring configuration
+   cat > /opt/citadel/monitoring/README.md << 'README'
+   # Citadel AI Monitoring Infrastructure
+   
+   This directory contains the monitoring infrastructure preparation for Citadel AI services.
+   
+   ## Directory Structure
+   - `prometheus/` - Prometheus configuration and data
+   - `grafana/` - Grafana dashboards and configuration
+   - `exporters/` - Custom metrics exporters
+   - `configs/` - Monitoring configuration files
+   
+   ## Integration Points
+   - Model services expose metrics on `/metrics` endpoint
+   - Health monitor integrates with monitoring system
+   - System metrics collected via node-exporter and GPU-exporter
+   
+   ## Future Implementation
+   This infrastructure will be fully implemented in future monitoring tasks (PLANB-08+).
+   
+   ## Prepared Endpoints
+   - Model services: ports 11400-11405, 11500
+   - System metrics: ports 9100-9101
+   - Health status: integrated with systemd journal
+   README
+   
+   # Set permissions
+   chown -R agent0:agent0 /opt/citadel/monitoring
+   chmod 755 /opt/citadel/monitoring
+   
+   echo "✅ Monitoring infrastructure prepared"
+   echo "📊 Ready for Prometheus/Grafana integration in future tasks"
+   EOF
+   
+   chmod +x /opt/citadel/scripts/prepare-monitoring.sh
+   ```
 
 2. **Create Service Logs Directory**
    ```bash
@@ -954,3 +1694,296 @@ Continue to **[PLANB-08-Backup-Monitoring.md](PLANB-08-Backup-Monitoring.md)** f
 **Estimated Time**: 45-60 minutes  
 **Complexity**: High  
 **Prerequisites**: All previous tasks completed, vLLM working, symlinks configured
+## Service Installation and Configuration
+
+### Step 1: Install and Enable Services (Updated for Incremental Deployment)
+
+1. **Use Incremental Deployment Approach**
+   ```bash
+   # Create configuration backup first
+   /opt/citadel/scripts/rollback-services.sh backup
+   
+   # Deploy services incrementally
+   echo "=== Incremental Service Deployment ==="
+   
+   # Phase 1: Infrastructure
+   citadel-deploy validate
+   citadel-deploy phase1
+   
+   # Phase 2: Test single model
+   citadel-deploy phase2 phi3
+   
+   # Phase 3: Deploy remaining models (if tests pass)
+   citadel-deploy phase3
+   
+   # Phase 4: Enable monitoring
+   citadel-deploy phase4
+   
+   echo "All services deployed incrementally"
+   ```
+
+2. **Prepare Monitoring Infrastructure**
+   ```bash
+   # Prepare monitoring integration
+   /opt/citadel/scripts/prepare-monitoring.sh
+   
+   echo "Monitoring infrastructure prepared for future integration"
+   ```
+
+3. **Create Service Logs Directory**
+   ```bash
+   # Create logs directory structure
+   mkdir -p /opt/citadel/logs/{services,models,monitoring}
+   
+   # Set up log rotation
+   sudo tee /etc/logrotate.d/citadel-ai << 'EOF'
+   /opt/citadel/logs/*.log {
+       daily
+       rotate 30
+       compress
+       delaycompress
+       missingok
+       notifempty
+       create 644 agent0 agent0
+   }
+   
+   /opt/citadel/logs/*/*.log {
+       daily
+       rotate 30
+       compress
+       delaycompress
+       missingok
+       notifempty
+       create 644 agent0 agent0
+   }
+   EOF
+   ```
+
+## Enhanced Validation Steps
+
+### Step 1: Prerequisites and Installation Verification
+
+```bash
+# Enhanced validation with prerequisites check
+echo "=== Enhanced Service Validation ==="
+
+# Step 1: Validate prerequisites
+echo "1. Validating prerequisites..."
+/opt/citadel/scripts/validate-prerequisites.sh
+
+# Step 2: Validate models
+echo "2. Validating models..."
+/opt/citadel/scripts/validate-models.sh
+
+# Step 3: Verify service installation
+echo "Service files:"
+ls -la /etc/systemd/system/citadel-*.service /etc/systemd/system/citadel-*.target
+
+# Check service status
+echo ""
+echo "Service status:"
+systemctl list-unit-files | grep citadel
+
+# Verify dependencies
+echo ""
+echo "Service dependencies:"
+systemctl list-dependencies citadel-ai.target
+```
+
+### Step 2: Service Functionality Testing
+
+```bash
+# Test service management
+echo "=== Service Management Testing ==="
+
+# Test service control script
+/opt/citadel/scripts/citadel-service.sh health
+
+# Test individual service start/stop
+echo ""
+echo "Testing service start/stop..."
+sudo systemctl start citadel-storage.service
+sudo systemctl status citadel-storage.service --no-pager
+sudo systemctl stop citadel-storage.service
+```
+
+### Step 3: Incremental Deployment Test
+
+```bash
+# Incremental deployment test
+echo "=== Incremental Deployment Test ==="
+
+# Phase 1: Infrastructure
+echo "Phase 1: Infrastructure services..."
+citadel-deploy phase1
+
+# Phase 2: Test model
+echo "Phase 2: Test model service..."
+citadel-deploy phase2 phi3
+
+# Phase 3: All models
+echo "Phase 3: All model services..."
+citadel-deploy phase3
+
+# Phase 4: Monitoring
+echo "Phase 4: Monitoring services..."
+citadel-deploy phase4
+
+# Final health check
+citadel health
+
+# Test rollback capability
+echo ""
+echo "Testing rollback capability..."
+citadel-rollback backup
+echo "Backup created for rollback testing"
+```
+
+### Step 4: Monitoring Preparation Test
+
+```bash
+# Test monitoring preparation
+echo "=== Monitoring Preparation Test ==="
+
+# Prepare monitoring infrastructure
+/opt/citadel/scripts/prepare-monitoring.sh
+
+# Verify monitoring endpoints configuration
+echo "Monitoring endpoints configured:"
+cat /opt/citadel/monitoring/configs/endpoints.yaml
+
+# Verify integration hooks
+echo "Integration hooks prepared:"
+ls -la /opt/citadel/scripts/monitoring-hooks.sh
+
+echo "✅ System ready for Prometheus/Grafana integration"
+```
+
+## Troubleshooting
+
+### Issue: Services Won't Start
+**Symptoms**: Service start failures, dependency errors
+**Solutions**:
+- Check service dependencies: `systemctl list-dependencies citadel-ai.target`
+- Check service logs: `journalctl -u service-name -f`
+- Verify environment file: `cat /etc/systemd/system/citadel-ai.env`
+- Check permissions: `ls -la /opt/citadel/services/`
+
+### Issue: Models Won't Load
+**Symptoms**: Model services fail to start, port binding errors
+**Solutions**:
+- Check model paths: `ls -la /opt/citadel/models/`
+- Verify GPU availability: `nvidia-smi`
+- Check port conflicts: `netstat -tlnp | grep :1140`
+- Check vLLM installation: `source /opt/citadel/vllm-env/bin/activate && python -c "import vllm"`
+
+### Issue: Health Monitor Not Working
+**Symptoms**: No health monitoring, services not restarting
+**Solutions**:
+- Check monitor service: `systemctl status citadel-monitor.service`
+- Check monitor logs: `journalctl -u citadel-monitor.service -f`
+- Verify network connectivity: `curl http://localhost:11400/health`
+- Check script permissions: `ls -la /opt/citadel/services/scripts/`
+
+### Issue: Rollback Failures
+**Symptoms**: Services won't stop, rollback script fails
+**Solutions**:
+- Use emergency rollback: `citadel-rollback emergency`
+- Check for stuck processes: `ps aux | grep vllm`
+- Manually kill processes: `pkill -f vllm`
+- Verify backup integrity: `ls -la /opt/citadel/backups/services/`
+
+## Configuration Summary
+
+### Services Created
+- ✅ **citadel-ai.target**: Main service target
+- ✅ **citadel-storage.service**: Storage verification
+- ✅ **citadel-gpu.service**: GPU optimization
+- ✅ **citadel-models.target**: Model services target
+- ✅ **Model Services**: 7 individual model services
+- ✅ **citadel-monitor.service**: Health monitoring
+
+### Management Tools
+- **citadel-service.sh**: Comprehensive service management
+- **start-model.sh/stop-model.sh**: Individual model control
+- **health-monitor.sh**: Continuous health monitoring
+- **citadel** command: Convenient service management alias
+- **citadel-deploy**: Incremental deployment management
+- **citadel-rollback**: Emergency rollback and backup system
+
+### Auto-start Configuration
+- All services enabled for automatic startup
+- Proper dependency chain configured
+- Health monitoring with automatic restart
+- Log rotation configured
+
+### New Safety Features
+- **Prerequisites validation**: Comprehensive system checks before deployment
+- **Incremental deployment**: Phase-by-phase service rollout
+- **Rollback system**: Emergency stop and configuration backup/restore
+- **Monitoring preparation**: Infrastructure ready for Prometheus/Grafana
+
+## Deployment Guide
+
+### Recommended Deployment Sequence
+
+1. **Prerequisites Validation**
+   ```bash
+   # Validate all prerequisites
+   /opt/citadel/scripts/validate-prerequisites.sh
+   /opt/citadel/scripts/validate-models.sh
+   ```
+
+2. **Incremental Deployment**
+   ```bash
+   # Create configuration backup
+   citadel-rollback backup
+   
+   # Deploy incrementally
+   citadel-deploy phase1    # Infrastructure
+   citadel-deploy phase2    # Test model
+   citadel-deploy phase3    # All models
+   citadel-deploy phase4    # Monitoring
+   ```
+
+3. **Monitoring Preparation**
+   ```bash
+   # Prepare for future monitoring integration
+   /opt/citadel/scripts/prepare-monitoring.sh
+   ```
+
+4. **Validation and Testing**
+   ```bash
+   # Verify deployment
+   citadel health
+   citadel-deploy status
+   
+   # Test rollback (optional)
+   citadel-rollback graceful
+   citadel-deploy phase1  # Re-deploy for testing
+   ```
+
+### Emergency Procedures
+
+- **Emergency Stop**: `citadel-rollback emergency`
+- **Graceful Rollback**: `citadel-rollback graceful`
+- **Restore from Backup**: `citadel-rollback restore <backup-id>`
+
+## Next Steps
+
+### Immediate Next Tasks
+- Continue to **[PLANB-08-Backup-Monitoring.md](PLANB-08-Backup-Monitoring.md)** for backup strategy implementation
+- Monitoring infrastructure is prepared for Prometheus/Grafana integration
+
+### Future Monitoring Integration
+- Prometheus metrics collection from model endpoints
+- Grafana dashboards for system visualization
+- Alerting integration with health monitoring system
+
+---
+
+**Task Status**: ⚠️ **Ready for Implementation**  
+**Estimated Time**: 45-60 minutes (+ 15 minutes for new features)  
+**Complexity**: High  
+**Prerequisites**: All previous tasks completed, vLLM working, symlinks configured  
+**New Features**: Prerequisites validation, incremental deployment, rollback strategy, monitoring preparation

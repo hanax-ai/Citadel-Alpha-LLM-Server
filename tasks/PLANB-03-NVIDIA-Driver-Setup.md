@@ -185,20 +185,20 @@ This task installs the latest NVIDIA 570.x series drivers with CUDA 12.4+ toolki
    
    # Remove existing NVIDIA packages with error handling
    echo "Removing existing NVIDIA packages..."
-   if ! sudo apt remove --purge nvidia* -y 2>/dev/null; then
+   if ! sudo apt-get remove --purge "nvidia*" -y 2>/dev/null; then
        echo "WARNING: Some NVIDIA packages could not be removed"
    fi
    
-   if ! sudo apt remove --purge cuda* -y 2>/dev/null; then
+   if ! sudo apt-get remove --purge "cuda*" -y 2>/dev/null; then
        echo "WARNING: Some CUDA packages could not be removed"
    fi
    
-   if ! sudo apt remove --purge libnvidia* -y 2>/dev/null; then
+   if ! sudo apt-get remove --purge "libnvidia*" -y 2>/dev/null; then
        echo "WARNING: Some NVIDIA library packages could not be removed"
    fi
    
-   sudo apt autoremove -y || echo "WARNING: Autoremove failed"
-   sudo apt autoclean || echo "WARNING: Autoclean failed"
+   sudo apt-get autoremove -y || echo "WARNING: Autoremove failed"
+   sudo apt-get autoclean || echo "WARNING: Autoclean failed"
    
    # Remove NVIDIA configuration files safely
    [ -f /etc/X11/xorg.conf ] && sudo rm -f /etc/X11/xorg.conf
@@ -421,14 +421,16 @@ This task installs the latest NVIDIA 570.x series drivers with CUDA 12.4+ toolki
    # Get current PATH to preserve existing entries
    CURRENT_PATH=$(grep "^PATH=" /etc/environment 2>/dev/null | cut -d'=' -f2 | tr -d '"' || echo "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin")
    
-   # Add CUDA to system PATH and library path
+
+   # Add CUDA to system PATH and library path without overwriting existing variables
    echo "Configuring system environment variables..."
-   sudo tee /etc/environment << EOF
-   PATH="${CURRENT_PATH}:${CUDA_PATH}/bin"
-   CUDA_HOME="${CUDA_PATH}"
-   CUDA_ROOT="${CUDA_PATH}"
-   LD_LIBRARY_PATH="${CUDA_PATH}/lib64:${CUDA_PATH}/extras/CUPTI/lib64"
-   EOF
+   # Remove any existing PATH entry
+   sudo sed -i '/^PATH=/d' /etc/environment
+   # Append new PATH and CUDA variables
+   echo "PATH=\"${CURRENT_PATH}:${CUDA_PATH}/bin\"" | sudo tee -a /etc/environment
+   echo "CUDA_HOME=\"${CUDA_PATH}\"" | sudo tee -a /etc/environment
+   echo "CUDA_ROOT=\"${CUDA_PATH}\"" | sudo tee -a /etc/environment
+   echo "LD_LIBRARY_PATH=\"${CUDA_PATH}/lib64:${CUDA_PATH}/extras/CUPTI/lib64\"" | sudo tee -a /etc/environment
    
    # Check if CUDA configuration already exists in bashrc
    if ! grep -q "NVIDIA CUDA Configuration" ~/.bashrc; then
@@ -599,19 +601,24 @@ This task installs the latest NVIDIA 570.x series drivers with CUDA 12.4+ toolki
        echo "WARNING: Could not enable persistence mode"
    fi
    
-   # Calculate and set power limit
+   # Calculate and set power limit for all GPUs
    POWER_LIMIT=$(( MAX_POWER * POWER_LIMIT_PERCENT / 100 ))
-   echo "Setting power limit to ${POWER_LIMIT}W..."
-   if ! nvidia-smi -pl "$POWER_LIMIT" >/dev/null 2>&1; then
-       echo "WARNING: Could not set power limit to ${POWER_LIMIT}W"
-   fi
-   
-   # Set GPU application clocks
-   if [ "$AUTO_DETECT" = "true" ]; then
-       echo "Setting application clocks to ${MAX_MEM_CLOCK},${MAX_GR_CLOCK}..."
-       if ! nvidia-smi -ac "${MAX_MEM_CLOCK},${MAX_GR_CLOCK}" >/dev/null 2>&1; then
-           echo "WARNING: Could not set application clocks"
+   GPU_COUNT=$(nvidia-smi -L | wc -l)
+   echo "Setting power limit to ${POWER_LIMIT}W on all GPUs..."
+   for idx in $(seq 0 $((GPU_COUNT-1))); do
+       if ! nvidia-smi -i "$idx" -pl "$POWER_LIMIT" >/dev/null 2>&1; then
+           echo "WARNING: Could not set power limit to ${POWER_LIMIT}W on GPU $idx"
        fi
+   done
+
+   # Set GPU application clocks for all GPUs
+   if [ "$AUTO_DETECT" = "true" ]; then
+       echo "Setting application clocks to ${MAX_MEM_CLOCK},${MAX_GR_CLOCK} on all GPUs..."
+       for idx in $(seq 0 $((GPU_COUNT-1))); do
+           if ! nvidia-smi -i "$idx" -ac "${MAX_MEM_CLOCK},${MAX_GR_CLOCK}" >/dev/null 2>&1; then
+               echo "WARNING: Could not set application clocks on GPU $idx"
+           fi
+       done
    fi
    
    # Set compute mode

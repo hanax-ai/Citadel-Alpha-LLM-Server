@@ -1,0 +1,137 @@
+# PLANB-05: vLLM Configuration Hierarchy
+# Main configuration file for vLLM system
+
+project:
+  name: "Citadel Alpha LLM Server"
+  version: "1.0.0"
+  description: "Production LLM inference server with vLLM framework"
+
+environment:
+  # Python environment configuration
+  dev_env_path: "/opt/citadel/dev-env"
+  python_version: "3.12"
+  
+  # Storage configuration
+  model_storage_path: "/mnt/citadel-models"
+  hf_cache_dir: "/mnt/citadel-models/cache"
+  transformers_cache: "/mnt/citadel-models/cache/transformers"
+  
+  # Compilation settings
+  max_jobs: 8
+  cuda_arch: "8.9"  # RTX 4070 Ti SUPER
+  gcc_version: "gcc-11"
+
+server:
+  # Default server configuration
+  default_host: "0.0.0.0"
+  default_port: 8000
+  port_range:
+    start: 11400
+    end: 11500
+  
+  # Performance settings
+  gpu_memory_utilization: 0.7
+  tensor_parallel_size: 1
+  
+  # API configuration
+  enable_docs: true
+  enable_metrics: true
+  cors_enabled: true
+
+models:
+  # Model configuration
+  download_timeout: 1800  # 30 minutes
+  max_context_length: 4096
+  
+  # Default test model
+  test_model: "facebook/opt-125m"
+  
+  # Supported model categories
+  categories:
+    small_models:
+      - "facebook/opt-125m"
+      - "facebook/opt-350m"
+      - "microsoft/DialoGPT-small"
+    
+    medium_models:
+      - "microsoft/Phi-3-mini-4k-instruct"
+      - "openchat/openchat-3.5-0106"
+      - "MILVLG/imp-v1-3b"
+    
+    large_models:
+      - "mistralai/Mixtral-8x7B-Instruct-v0.1"
+      - "01-ai/Yi-34B-Chat"
+      - "NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO"
+      - "deepseek-ai/deepseek-coder-14b-instruct-v1.5"
+
+testing:
+  # Test configuration
+  enable_performance_tests: true
+  min_throughput: 1.0  # requests/second
+  test_timeout: 300  # 5 minutes
+  test_cache_dir: "/tmp/vllm_test_cache"
+  
+  # Validation settings
+  validation_models:
+    - "facebook/opt-125m"
+  
+  performance_test_configs:
+    - gpu_memory_utilization: 0.3
+      tensor_parallel_size: 1
+    - gpu_memory_utilization: 0.5
+      tensor_parallel_size: 1
+    - gpu_memory_utilization: 0.7
+      tensor_parallel_size: 1
+
+monitoring:
+  # Monitoring and logging
+  enable_prometheus: true
+  prometheus_port: 8001
+  
+  # Health check settings
+  health_check_interval: 30  # seconds
+  health_check_timeout: 10   # seconds
+  
+  # Logging configuration
+  log_level: "INFO"
+  verbose_logging: false
+
+hardware:
+  # Hardware-specific configuration
+  target_gpu: "RTX 4070 Ti SUPER"
+  gpu_memory_total: "32GB"  # 2x 16GB cards
+  system_memory: "128GB"
+  storage_nvme: "3.6TB"
+  
+  # Optimization settings
+  cuda_visible_devices: "0,1"  # Both GPUs
+  numa_enabled: true
+
+security:
+  # Security configuration
+  require_auth: true
+  token_validation: true
+  
+  # API security
+  rate_limiting:
+    enabled: true
+    requests_per_minute: 60
+  
+  # CORS settings
+  allowed_origins:
+    - "http://localhost:*"
+    - "http://192.168.10.*"
+
+deployment:
+  # Deployment configuration
+  environment_type: "production"
+  debug_mode: false
+  
+  # Service configuration
+  systemd_enabled: true
+  auto_restart: true
+  restart_delay: 5  # seconds
+  
+  # Backup settings
+  model_backup_enabled: true
+  config_backup_enabled: true

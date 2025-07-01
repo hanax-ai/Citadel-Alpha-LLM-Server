@@ -59,13 +59,10 @@ fi
 ### Step 2: Create Environment Management Script
 
 ```bash
-# Create enhanced environment management script with error handling
-create_env_manager() {
-    local script_path="/opt/citadel/scripts/env-manager.sh"
-    
-    echo "Creating environment management script..."
-    
-    sudo tee "$script_path" << 'EOF'
+# Create the environment manager (inline, not as a function)
+script_path="/opt/citadel/scripts/env-manager.sh"
+echo "Creating environment management script..."
+sudo tee "$script_path" << 'EOF'
 #!/bin/bash
 # env-manager.sh - Manage Python virtual environments with error handling
 
@@ -91,7 +88,6 @@ load_env_config() {
     if [ ! -f "$CONFIG_FILE" ]; then
         handle_error "Configuration file not found: $CONFIG_FILE"
     fi
-    
     # Extract environment names from config
     ENV_NAMES=$(python3 -c "
 import json
@@ -114,7 +110,6 @@ show_usage() {
     echo "  delete [env]     - Delete virtual environment"
     echo ""
     echo "Available environments (from config):"
-    
     load_env_config
     for env in $ENV_NAMES; do
         local purpose=$(python3 -c "
@@ -130,9 +125,7 @@ print(config['environments']['$env']['purpose'])
 create_env() {
     local env_name=${1:-"citadel-env"}
     local env_path="$CITADEL_ROOT/$env_name"
-    
     log "Creating environment: $env_name"
-    
     if [ -d "$env_path" ]; then
         log "WARNING: Environment $env_name already exists at $env_path"
         read -p "Delete and recreate? (y/N): " -n 1 -r
@@ -145,19 +138,15 @@ create_env() {
             return 0
         fi
     fi
-    
     # Create virtual environment
     if ! python3.12 -m venv "$env_path"; then
         handle_error "Failed to create virtual environment: $env_name"
     fi
-    
     # Activate and upgrade base packages
     source "$env_path/bin/activate"
-    
     if ! pip install --upgrade pip setuptools wheel; then
         log "WARNING: Failed to upgrade base packages (non-critical)"
     fi
-    
     log "✅ Environment $env_name created successfully"
 }
 
@@ -165,15 +154,12 @@ create_env() {
 activate_env() {
     local env_name=${1:-"citadel-env"}
     local env_path="$CITADEL_ROOT/$env_name"
-    
     if [ ! -d "$env_path" ]; then
         handle_error "Environment $env_name not found at $env_path"
     fi
-    
     log "Activating environment: $env_name"
     source "$env_path/bin/activate"
-    
-    echo "Active environment: $(basename "$VIRTUAL_ENV")"
+    echo "Active environment: $(basename \"$VIRTUAL_ENV\")"
     echo "Python version: $(python --version)"
     echo "Pip version: $(pip --version)"
 }
@@ -182,7 +168,6 @@ activate_env() {
 list_envs() {
     echo "Available environments:"
     load_env_config
-    
     for env in $ENV_NAMES; do
         local env_path="$CITADEL_ROOT/$env"
         if [ -d "$env_path" ]; then
@@ -197,7 +182,7 @@ list_envs() {
 # Show environment info
 show_info() {
     if [ -n "${VIRTUAL_ENV:-}" ]; then
-        echo "Active environment: $(basename "$VIRTUAL_ENV")"
+        echo "Active environment: $(basename \"$VIRTUAL_ENV\")"
         echo "Environment path: $VIRTUAL_ENV"
         echo "Python version: $(python --version)"
         echo "Python path: $(which python)"
@@ -212,19 +197,15 @@ show_info() {
 # Delete environment
 delete_env() {
     local env_name=${1:-""}
-    
     if [ -z "$env_name" ]; then
         echo "ERROR: Environment name required for deletion"
         return 1
     fi
-    
     local env_path="$CITADEL_ROOT/$env_name"
-    
     if [ ! -d "$env_path" ]; then
         log "Environment $env_name not found at $env_path"
         return 1
     fi
-    
     read -p "Delete environment $env_name? This cannot be undone (y/N): " -n 1 -r
     echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
@@ -267,14 +248,9 @@ case "${1:-}" in
         ;;
 esac
 EOF
-    
-    chmod +x "$script_path"
-    echo "✅ Environment manager script created: $script_path"
-    return 0
-}
-
-# Create the environment manager
-if ! $ERROR_HANDLER execute "Environment Manager Creation" "create_env_manager" "[ -f /opt/citadel/scripts/env-manager.sh ]"; then
+chmod +x "$script_path"
+echo "✅ Environment manager script created: $script_path"
+if [ ! -f /opt/citadel/scripts/env-manager.sh ]; then
     echo "❌ Failed to create environment manager"
     exit 1
 fi
@@ -466,7 +442,7 @@ print(' '.join(envs))
     
     # Test activation script
     echo "Testing activation script..."
-    if ! bash /opt/citadel/scripts/activate-citadel.sh -c "echo 'Activation test passed'"; then
+    if ! ( source /opt/citadel/scripts/activate-citadel.sh && echo 'Activation test passed' ); then
         echo "ERROR: Activation script test failed"
         return 1
     fi
