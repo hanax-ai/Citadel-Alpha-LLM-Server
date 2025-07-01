@@ -1,0 +1,54 @@
+{
+  "python": {
+    "repository": "ppa:deadsnakes/ppa",
+    "packages": [
+      "python3.12",
+      "python3.12-dev",
+      "python3.12-venv"
+    ],
+    "build_dependencies": [
+      "build-essential",
+      "libssl-dev",
+      "zlib1g-dev",
+      "libbz2-dev",
+      "libreadline-dev",
+      "libsqlite3-dev",
+      "wget",
+      "curl",
+      "llvm",
+      "libncurses5-dev",
+      "libncursesw5-dev",
+      "xz-utils",
+      "tk-dev",
+      "libffi-dev",
+      "liblzma-dev"
+    ]
+  },
+  "environments": {
+    "citadel-env": {
+      "purpose": "Main application environment"
+    },
+    "vllm-env": {
+      "purpose": "vLLM inference environment"
+    },
+    "dev-env": {
+      "purpose": "Development and testing environment"
+    }
+  },
+  "optimization": {
+    "memory": {
+      "malloc_arena_max": 4
+    },
+    "threading": {
+      "max_threads": 8
+    },
+    "cuda": {
+      "launch_blocking": false,
+      "cache_disable": false
+    }
+  },
+  "paths": {
+    "citadel_root": "/opt/citadel",
+    "models_cache": "/mnt/citadel-models/cache"
+  }
+}
