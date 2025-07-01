@@ -100,3 +100,4 @@ Here is the corrected approach for that section:
 Remove the function definition for create_env_manager and its call.
 Inline the script creation logic directly before the error handler check.
 or package the body of the function into a standalone script and call that.
+Thank you!
