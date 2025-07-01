@@ -166,16 +166,21 @@ EOF
    # Get UUIDs for fstab
    sudo blkid /dev/nvme1n1
    sudo blkid /dev/sda
+   
+   # Example output:
+   # /dev/nvme1n1: UUID="12345678-1234-1234-1234-123456789abc" TYPE="ext4"
+   # /dev/sda: UUID="87654321-4321-4321-4321-cba987654321" TYPE="ext4"
    ```
 
 3. **Update /etc/fstab**
    ```bash
-   # Add to /etc/fstab (replace UUIDs with actual values)
+   # Add to /etc/fstab (replace UUIDs with actual values from blkid output above)
+   # Example: Replace "12345678-1234-1234-1234-123456789abc" with your actual UUID
    sudo tee -a /etc/fstab << 'EOF'
    
    # Citadel AI OS Storage Configuration
-   UUID=nvme1n1-uuid /mnt/citadel-models ext4 defaults,noatime 0 2
-   UUID=sda-uuid /mnt/citadel-backup ext4 defaults,noatime 0 2
+   UUID=12345678-1234-1234-1234-123456789abc /mnt/citadel-models ext4 defaults,noatime 0 2
+   UUID=87654321-4321-4321-4321-cba987654321 /mnt/citadel-backup ext4 defaults,noatime 0 2
    EOF
    
    # Test mount
@@ -277,6 +282,30 @@ sudo rm /mnt/citadel-models/test
 # Network speed test (if available)
 sudo apt install -y speedtest-cli
 speedtest-cli
+```
+
+### Step 5: GPU Detection Verification
+```bash
+# Check GPU detection
+lspci | grep -i nvidia
+nvidia-smi 2>/dev/null || echo "NVIDIA drivers not yet installed"
+
+# Check PCIe slots and GPU placement
+sudo lspci -vv | grep -A 10 -i nvidia
+```
+
+### Step 6: CUDA/Driver Installation Validation
+```bash
+# Check for NVIDIA driver installation
+dpkg -l | grep nvidia
+modinfo nvidia 2>/dev/null || echo "NVIDIA kernel module not loaded"
+
+# Verify IOMMU and virtualization support for AI workloads
+dmesg | grep -i iommu
+cat /proc/cpuinfo | grep -E "(vmx|svm)"
+
+# Check CUDA toolkit availability (if pre-installed)
+nvcc --version 2>/dev/null || echo "CUDA toolkit not yet installed"
 ```
 
 ## Troubleshooting
