@@ -157,44 +157,57 @@ fi
 ### Step 5: Configure Python Alternatives
 
 ```bash
+
 # Configure Python alternatives with error handling
 configure_alternatives() {
     echo "Configuring Python alternatives..."
-    
-    # Remove existing alternatives to avoid conflicts
-    sudo update-alternatives --remove-all python3 2>/dev/null || true
-    sudo update-alternatives --remove-all python 2>/dev/null || true
-    sudo update-alternatives --remove-all pip3 2>/dev/null || true
-    sudo update-alternatives --remove-all pip 2>/dev/null || true
-    
-    # Set up Python alternatives
+
+    # Only remove alternatives for python3/python/pip3/pip if they point to python3.12 or pip3.12, or if about to be overwritten
+    # This minimizes risk of removing all python alternatives before python3.12 is installed
+
+    # Set up Python alternatives (after confirming python3.12 is installed)
     if ! sudo update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.12 100; then
         echo "ERROR: Failed to configure python3 alternative"
         return 1
     fi
-    
+
     if ! sudo update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.10 90; then
         echo "WARNING: Failed to configure python3.10 alternative (non-critical)"
     fi
-    
+
     if ! sudo update-alternatives --install /usr/bin/python python /usr/bin/python3.12 100; then
         echo "ERROR: Failed to configure python alternative"
         return 1
     fi
-    
+
     # Set up pip alternatives
     local pip312_path=$(which pip3.12 2>/dev/null || echo "/usr/local/bin/pip3.12")
-    
+
     if [ -f "$pip312_path" ]; then
         if ! sudo update-alternatives --install /usr/bin/pip3 pip3 "$pip312_path" 100; then
             echo "WARNING: Failed to configure pip3 alternative (non-critical)"
         fi
-        
+
         if ! sudo update-alternatives --install /usr/bin/pip pip "$pip312_path" 100; then
             echo "WARNING: Failed to configure pip alternative (non-critical)"
         fi
     fi
-    
+
+    # Optionally, remove any alternatives that point to non-existent binaries (cleanup)
+    # This is safe after python3.12 and pip3.12 are installed and alternatives are set
+    sudo update-alternatives --remove-all python3 2>/dev/null || true
+    sudo update-alternatives --remove-all python 2>/dev/null || true
+    sudo update-alternatives --remove-all pip3 2>/dev/null || true
+    sudo update-alternatives --remove-all pip 2>/dev/null || true
+
+    # Re-add alternatives to ensure correct configuration
+    sudo update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.12 100
+    sudo update-alternatives --install /usr/bin/python python /usr/bin/python3.12 100
+    if [ -f "$pip312_path" ]; then
+        sudo update-alternatives --install /usr/bin/pip3 pip3 "$pip312_path" 100
+        sudo update-alternatives --install /usr/bin/pip pip "$pip312_path" 100
+    fi
+
     return 0
 }
 

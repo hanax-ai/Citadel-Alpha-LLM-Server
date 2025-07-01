@@ -168,6 +168,7 @@ EOF
    sudo blkid /dev/sda
    
    # Example output:
+   # !!! REPLACE the UUID below with the exact value from blkid output !!!
    # /dev/nvme1n1: UUID="12345678-1234-1234-1234-123456789abc" TYPE="ext4"
    # /dev/sda: UUID="87654321-4321-4321-4321-cba987654321" TYPE="ext4"
    ```

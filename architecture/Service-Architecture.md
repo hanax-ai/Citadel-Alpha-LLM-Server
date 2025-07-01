@@ -247,6 +247,10 @@ case "$MODEL_NAME" in
         MAX_MODEL_LEN=4096
         ;;
     # Additional model configurations...
+    *)
+        echo "[start-model.sh] ERROR: Unknown MODEL_NAME '$MODEL_NAME'. Supported models: mixtral, yi34b, ..."
+        exit 2
+        ;;
 esac
 
 # Start vLLM server with optimized parameters
@@ -326,6 +330,11 @@ sequenceDiagram
 ```bash
 #!/bin/bash
 # health-monitor.sh - Continuous health monitoring
+set -euo pipefail
+
+log_message() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
+}
 
 MONITOR_INTERVAL=60
 declare -A MODEL_PORTS=(
@@ -342,7 +351,7 @@ check_service_health() {
     local model_name="$1"
     local port="$2"
     
-    if curl -s "http://localhost:$port/health" > /dev/null 2>&1; then
+    if curl --fail --silent --connect-timeout 2 "http://localhost:$port/health" > /dev/null 2>&1; then
         return 0
     else
         return 1

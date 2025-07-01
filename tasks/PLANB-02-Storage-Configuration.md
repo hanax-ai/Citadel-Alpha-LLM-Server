@@ -276,7 +276,9 @@ mount | grep -E "(citadel|nvme|sd[a-z])"
    sudo systemctl enable fstrim.timer
    sudo systemctl start fstrim.timer
    
+
    # Configure I/O scheduler for NVMe (using detected device)
+   # NOTE: The following echo command sets the scheduler only until reboot. For persistence, see the udev rule below.
    NVME_BLOCK_DEVICE=$(basename "$NVME_MODEL_DEVICE")
    if [ -f "/sys/block/$NVME_BLOCK_DEVICE/queue/scheduler" ]; then
        echo 'none' | sudo tee "/sys/block/$NVME_BLOCK_DEVICE/queue/scheduler" || {
@@ -295,7 +297,9 @@ mount | grep -E "(citadel|nvme|sd[a-z])"
 
 2. **HDD Optimization**
    ```bash
+
    # Configure I/O scheduler for HDD (using detected device)
+   # NOTE: The following echo command sets the scheduler only until reboot. For persistence, see the udev rule below.
    BACKUP_BLOCK_DEVICE=$(basename "$BACKUP_DEVICE")
    if [ -f "/sys/block/$BACKUP_BLOCK_DEVICE/queue/scheduler" ]; then
        echo 'mq-deadline' | sudo tee "/sys/block/$BACKUP_BLOCK_DEVICE/queue/scheduler" || {

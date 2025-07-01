@@ -2,7 +2,7 @@
 """
 PLANB-05 Pre-Installation Validation Script
 
-This script validates all prerequisites before vLLM installation begins. 
+This script validates all prerequisites before vLLM installation begins.
 Ensures environment readiness and script availability per task rules.
 
 Usage:

@@ -209,11 +209,16 @@ validate_resources() {
         handle_error "Insufficient memory: need 4GB, have ${AVAILABLE_MEMORY}MB available"
     fi
     
-    # Check internet connectivity
+    # Check internet connectivity (basic IP reachability)
     if ! ping -c 1 8.8.8.8 >/dev/null 2>&1; then
-        handle_error "No internet connectivity - required for package downloads"
+        handle_error "No internet connectivity - required for package downloads (ping to 8.8.8.8 failed)"
     fi
-    
+
+    # Check DNS resolution (pypi.org)
+    if ! curl -I --connect-timeout 5 https://pypi.org >/dev/null 2>&1; then
+        handle_error "DNS resolution or HTTPS connectivity failed for pypi.org - required for Python package installation"
+    fi
+
     log "✅ System resources validated"
 }
 

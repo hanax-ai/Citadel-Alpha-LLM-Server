@@ -7,20 +7,6 @@ The docs URL is hardcoded to port 8000, but the actual port is configurable via 
 +        print(f"📚 API docs at: http://localhost:{port}/docs")
 
 
-CodeRabbit
-Add port number validation
-
-The port argument should be validated to ensure it's within the valid range (1-65535).
-
--    parser.add_argument("--port", type=int, default=8000, help="Server port")
-+    parser.add_argument(
-+        "--port", 
-+        type=int, 
-+        default=8000, 
-+        help="Server port (1-65535)",
-+        choices=range(1, 65536),
-+        metavar="PORT"
-+    )
 
 CodeRabbit
 Security consideration: --trust-remote-code is always enabled
@@ -56,17 +42,6 @@ The NVIDIA RTX 4070 Ti SUPER ships with 16 GB GDDR6X, not 32 GB. Over-stating VR
 +**GPU**: RTX 4070 Ti SUPER (16 GB VRAM)
 Adjust the subsequent “Hardware Optimization Rationale” lines accordingly (61-64) to reflect realistic capacity or pick a GPU that genuinely has 24–48 GB if 34 B model support is a hard requirement.
 
-CodeRabbit
-Critical error: Missing sys import.
-
-The script uses sys.exit() but doesn't import the sys module, which will cause a runtime NameError.
-
-+import sys
- import requests
- import json
- import time
- import argparse
- from rich.console import Console
 
 Improve virtual environment detection
 
