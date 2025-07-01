@@ -1,0 +1,157 @@
+graph TB
+    subgraph "Application Layer"
+        AppModels[/opt/citadel/models<br/>Primary Model Access]
+        AppDownloads[/opt/citadel/downloads<br/>Model Download Staging]
+        AppStaging[/opt/citadel/staging<br/>Model Staging Area]
+        ModelLinks[/opt/citadel/model-links/<br/>Convenience Links]
+    end
+    
+    subgraph "Symlink Management"
+        StorageManager[Storage Manager<br/>Symlink Creation<br/>Health Monitoring]
+        SymlinkHealth[Symlink Health Checker<br/>Broken Link Detection<br/>Auto Repair]
+        PathValidator[Path Validator<br/>Target Verification<br/>Permission Checks]
+    end
+    
+    subgraph "Physical Storage - NVMe SSD (3.6TB)"
+        NVMeRoot[/mnt/citadel-models<br/>NVMe Mount Point]
+        ActiveModels[active/<br/>Production Models<br/>2.4TB Allocation]
+        CacheDir[cache/<br/>ML Framework Cache<br/>800GB Allocation]
+        DownloadsDir[downloads/<br/>Download Staging<br/>200GB Allocation]
+        StagingDir[staging/<br/>Model Staging<br/>100GB Allocation]
+        ArchiveDir[archive/<br/>Archived Models<br/>Variable Size]
+    end
+    
+    subgraph "Active Model Storage"
+        MixtralModel[Mixtral-8x7B-Instruct-v0.1/<br/>~14GB Model Files]
+        Yi34BModel[Yi-34B-Chat/<br/>~34GB Model Files]
+        HermesModel[Nous-Hermes-2-Mixtral-8x7B-DPO/<br/>~14GB Model Files]
+        OpenChatModel[openchat-3.5-1210/<br/>~7GB Model Files]
+        Phi3Model[Phi-3-mini-128k-instruct/<br/>~4GB Model Files]
+        CoderModel[deepseek-coder-14b-instruct-v1.5/<br/>~14GB Model Files]
+        VisionModel[imp-v1_5-7b/<br/>~8GB Model Files]
+    end
+    
+    subgraph "Cache Integration"
+        HFCache[huggingface/<br/>HuggingFace Hub Cache<br/>Model Downloads]
+        TorchCache[torch/<br/>PyTorch Cache<br/>Pretrained Models]
+        VLLMCache[vllm/<br/>vLLM Cache<br/>Compiled Kernels]
+        TransformersCache[transformers/<br/>Transformers Cache<br/>Tokenizers & Config]
+    end
+    
+    subgraph "Physical Storage - HDD (7.3TB)"
+        HDDRoot[/mnt/citadel-backup<br/>HDD Mount Point]
+        ModelBackups[models/<br/>Model Backups<br/>5TB Allocation]
+        SystemBackups[system/<br/>System Backups<br/>1TB Allocation]
+        BackupMetadata[metadata/<br/>Backup Metadata<br/>100GB Allocation]
+    end
+    
+    subgraph "Backup Management"
+        BackupScheduler[Backup Scheduler<br/>Cron Integration<br/>Daily/Weekly/Monthly]
+        BackupEngine[Backup Engine<br/>rsync + hard links<br/>Incremental Strategy]
+        IntegrityChecker[Integrity Checker<br/>Checksum Validation<br/>Sample Verification]
+        RetentionManager[Retention Manager<br/>Automated Cleanup<br/>Policy Enforcement]
+    end
+    
+    subgraph "Storage Monitoring"
+        DiskMonitor[Disk Usage Monitor<br/>Space & Inode Tracking<br/>Threshold Alerts]
+        PerformanceMonitor[Performance Monitor<br/>I/O Latency & Throughput<br/>SMART Health]
+        HealthReporter[Health Reporter<br/>Status Aggregation<br/>Prometheus Metrics]
+    end
+    
+    %% Application to Storage Symlinks
+    AppModels -.->|symlink| ActiveModels
+    AppDownloads -.->|symlink| DownloadsDir
+    AppStaging -.->|symlink| StagingDir
+    
+    %% Model-specific Convenience Links
+    ModelLinks -.->|mixtral| MixtralModel
+    ModelLinks -.->|yi34b| Yi34BModel
+    ModelLinks -.->|hermes| HermesModel
+    ModelLinks -.->|openchat| OpenChatModel
+    ModelLinks -.->|phi3| Phi3Model
+    ModelLinks -.->|coder| CoderModel
+    ModelLinks -.->|vision| VisionModel
+    
+    %% NVMe Storage Structure
+    NVMeRoot --> ActiveModels
+    NVMeRoot --> CacheDir
+    NVMeRoot --> DownloadsDir
+    NVMeRoot --> StagingDir
+    NVMeRoot --> ArchiveDir
+    
+    %% Active Models
+    ActiveModels --> MixtralModel
+    ActiveModels --> Yi34BModel
+    ActiveModels --> HermesModel
+    ActiveModels --> OpenChatModel
+    ActiveModels --> Phi3Model
+    ActiveModels --> CoderModel
+    ActiveModels --> VisionModel
+    
+    %% Cache Structure
+    CacheDir --> HFCache
+    CacheDir --> TorchCache
+    CacheDir --> VLLMCache
+    CacheDir --> TransformersCache
+    
+    %% HDD Backup Structure
+    HDDRoot --> ModelBackups
+    HDDRoot --> SystemBackups
+    HDDRoot --> BackupMetadata
+    
+    %% Symlink Management
+    StorageManager --> AppModels
+    StorageManager --> AppDownloads
+    StorageManager --> AppStaging
+    StorageManager --> ModelLinks
+    
+    SymlinkHealth --> StorageManager
+    PathValidator --> StorageManager
+    
+    %% Backup Operations
+    BackupScheduler --> BackupEngine
+    BackupEngine --> ModelBackups
+    BackupEngine --> ActiveModels
+    
+    IntegrityChecker --> ModelBackups
+    RetentionManager --> ModelBackups
+    RetentionManager --> SystemBackups
+    
+    %% Storage Monitoring
+    DiskMonitor --> NVMeRoot
+    DiskMonitor --> HDDRoot
+    PerformanceMonitor --> NVMeRoot
+    PerformanceMonitor --> HDDRoot
+    
+    HealthReporter --> DiskMonitor
+    HealthReporter --> PerformanceMonitor
+    HealthReporter --> SymlinkHealth
+    
+    %% Environment Integration
+    HFCache -.->|"$HF_HOME"| TorchCache
+    VLLMCache -.->|"$VLLM_CACHE_ROOT"| TransformersCache
+    
+    %% Data Flow Annotations
+    AppModels -.->|"Transparent Access<br/>via Symlinks"| ActiveModels
+    BackupEngine -.->|"rsync --link-dest<br/>Incremental Backup"| ModelBackups
+    SymlinkHealth -.->|"Automated Repair<br/>Broken Link Detection"| StorageManager
+    DiskMonitor -.->|"80% Warning<br/>90% Critical"| HealthReporter
+    
+    %% Styling
+    classDef appLayer fill:#e1f5fe
+    classDef symlinkLayer fill:#f3e5f5
+    classDef nvmeLayer fill:#e8f5e8
+    classDef modelLayer fill:#fff3e0
+    classDef cacheLayer fill:#f9fbe7
+    classDef hddLayer fill:#fff8e1
+    classDef backupLayer fill:#ffebee
+    classDef monitorLayer fill:#fce4ec
+    
+    class AppModels,AppDownloads,AppStaging,ModelLinks appLayer
+    class StorageManager,SymlinkHealth,PathValidator symlinkLayer
+    class NVMeRoot,ActiveModels,CacheDir,DownloadsDir,StagingDir,ArchiveDir nvmeLayer
+    class MixtralModel,Yi34BModel,HermesModel,OpenChatModel,Phi3Model,CoderModel,VisionModel modelLayer
+    class HFCache,TorchCache,VLLMCache,TransformersCache cacheLayer
+    class HDDRoot,ModelBackups,SystemBackups,BackupMetadata hddLayer
+    class BackupScheduler,BackupEngine,IntegrityChecker,RetentionManager backupLayer
+    class DiskMonitor,PerformanceMonitor,HealthReporter monitorLayer

@@ -1,6 +1,6 @@
 #!/bin/bash
 # PLANB-05: Latest vLLM Installation with Compatibility Resolution
-# Version: 1.0
+# Version: 1.0 
 # Target: vLLM 0.6.1+ with PyTorch 2.4+ and Python 3.12
 
 set -euo pipefail

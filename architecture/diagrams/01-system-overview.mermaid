@@ -1,0 +1,150 @@
+graph TB
+    subgraph "Client Layer"
+        WebUI[Web Interface<br/>Port 3000]
+        API[REST API Clients<br/>OpenAI Compatible]
+        SDK[Python SDK<br/>Local Development]
+    end
+    
+    subgraph "Load Balancer Layer"
+        LB[Load Balancer<br/>HAProxy/Nginx<br/>Port 80/443]
+    end
+    
+    subgraph "Service Layer - Model Distribution"
+        MS1[Mixtral Service<br/>Port 11400<br/>8x7B Model]
+        MS2[Hermes Service<br/>Port 11401<br/>Mixtral DPO]
+        MS3[OpenChat Service<br/>Port 11402<br/>3.5-1210]
+        MS4[Phi-3 Service<br/>Port 11403<br/>Mini 128k]
+        MS5[Yi-34B Service<br/>Port 11404<br/>Chat Model]
+        MS6[Coder Service<br/>Port 11405<br/>DeepSeek 14B]
+        MS7[Vision Service<br/>Port 11500<br/>Multimodal]
+    end
+    
+    subgraph "Health & Monitoring"
+        HealthAPI[Health Check API<br/>Port 8000-8001]
+        MetricsExp[Metrics Exporter<br/>Prometheus Format]
+    end
+    
+    subgraph "vLLM Engine Layer"
+        vLLMCore[vLLM Core Engine<br/>GPU Optimized]
+        AttentionEngine[Flash Attention 2<br/>Memory Efficient]
+        KVCache[KV Cache Manager<br/>Dynamic Allocation]
+        TokenEngine[Tokenization Engine<br/>Fast Processing]
+    end
+    
+    subgraph "GPU Infrastructure"
+        GPU[NVIDIA RTX 4070 Ti SUPER<br/>16GB VRAM<br/>CUDA 12.4+]
+        CUDAKernels[CUDA Kernels<br/>Optimized Operations]
+    end
+    
+    subgraph "Storage Layer"
+        ActiveModels[Active Models<br/>3.6TB NVMe SSD<br/>/mnt/citadel-models]
+        ModelCache[Model Cache<br/>HF/PyTorch/vLLM<br/>Fast Access]
+        BackupStorage[Backup Storage<br/>7.3TB HDD<br/>Multi-tier Backups]
+    end
+    
+    subgraph "Configuration & Management"
+        ConfigMgr[Configuration Manager<br/>Pydantic Settings]
+        StorageOrch[Storage Orchestrator<br/>Symlink Management]
+        BackupMgr[Backup Manager<br/>Automated Protection]
+    end
+    
+    subgraph "Monitoring Stack"
+        Prometheus[Prometheus<br/>192.168.10.36:9090<br/>Metrics Collection]
+        Grafana[Grafana<br/>192.168.10.36:3000<br/>Visualization]
+        AlertManager[AlertManager<br/>192.168.10.36:9093<br/>Alerting]
+    end
+    
+    subgraph "System Services"
+        SystemD[SystemD Services<br/>citadel-ai.target<br/>Service Orchestration]
+        ServiceMgr[Service Manager<br/>Health Monitoring<br/>Auto Restart]
+    end
+    
+    %% Client to Load Balancer
+    WebUI --> LB
+    API --> LB
+    SDK --> LB
+    
+    %% Load Balancer to Services
+    LB --> MS1
+    LB --> MS2
+    LB --> MS3
+    LB --> MS4
+    LB --> MS5
+    LB --> MS6
+    LB --> MS7
+    
+    %% Services to vLLM Engine
+    MS1 --> vLLMCore
+    MS2 --> vLLMCore
+    MS3 --> vLLMCore
+    MS4 --> vLLMCore
+    MS5 --> vLLMCore
+    MS6 --> vLLMCore
+    MS7 --> vLLMCore
+    
+    %% vLLM Engine Components
+    vLLMCore --> AttentionEngine
+    vLLMCore --> KVCache
+    vLLMCore --> TokenEngine
+    
+    %% vLLM to GPU
+    AttentionEngine --> GPU
+    KVCache --> GPU
+    TokenEngine --> GPU
+    GPU --> CUDAKernels
+    
+    %% Storage Connections
+    vLLMCore --> ActiveModels
+    vLLMCore --> ModelCache
+    StorageOrch --> ActiveModels
+    BackupMgr --> BackupStorage
+    
+    %% Configuration
+    ConfigMgr --> MS1
+    ConfigMgr --> MS2
+    ConfigMgr --> MS3
+    ConfigMgr --> MS4
+    ConfigMgr --> MS5
+    ConfigMgr --> MS6
+    ConfigMgr --> MS7
+    
+    %% Health Monitoring
+    MS1 --> HealthAPI
+    MS2 --> HealthAPI
+    MS3 --> HealthAPI
+    MS4 --> HealthAPI
+    MS5 --> HealthAPI
+    MS6 --> HealthAPI
+    MS7 --> HealthAPI
+    
+    HealthAPI --> MetricsExp
+    MetricsExp --> Prometheus
+    
+    %% Monitoring Stack
+    Prometheus --> Grafana
+    Prometheus --> AlertManager
+    
+    %% System Management
+    SystemD --> MS1
+    SystemD --> MS2
+    SystemD --> MS3
+    SystemD --> MS4
+    SystemD --> MS5
+    SystemD --> MS6
+    SystemD --> MS7
+    
+    ServiceMgr --> SystemD
+    ServiceMgr --> HealthAPI
+    
+    %% Styling
+    classDef clientLayer fill:#e1f5fe
+    classDef serviceLayer fill:#f3e5f5
+    classDef engineLayer fill:#fff3e0
+    classDef storageLayer fill:#e8f5e8
+    classDef monitorLayer fill:#fff8e1
+    
+    class WebUI,API,SDK clientLayer
+    class MS1,MS2,MS3,MS4,MS5,MS6,MS7 serviceLayer
+    class vLLMCore,AttentionEngine,KVCache,TokenEngine,GPU engineLayer
+    class ActiveModels,ModelCache,BackupStorage storageLayer
+    class Prometheus,Grafana,AlertManager,HealthAPI monitorLayer

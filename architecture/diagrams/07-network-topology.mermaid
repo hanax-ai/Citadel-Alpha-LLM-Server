@@ -1,0 +1,169 @@
+graph TB
+    subgraph "External Network"
+        Internet[Internet<br/>External Clients<br/>Public Access]
+        VPN[VPN Gateway<br/>Remote Access<br/>Secure Tunnel]
+        ExternalAPI[External APIs<br/>HuggingFace Hub<br/>Model Downloads]
+    end
+    
+    subgraph "Hana-X Lab Network - 192.168.10.0/24"
+        Router[Network Router<br/>192.168.10.1<br/>Gateway]
+        Switch[Network Switch<br/>Gigabit Ethernet<br/>Port Management]
+        DNS[Internal DNS<br/>192.168.10.2<br/>Name Resolution]
+        NTP[NTP Server<br/>192.168.10.3<br/>Time Sync]
+    end
+    
+    subgraph "Citadel Alpha LLM Server - 192.168.10.36"
+        ServerNode[Dell Precision 3630<br/>192.168.10.36<br/>Main Server]
+        
+        subgraph "Network Interfaces"
+            EthInterface[eth0<br/>Gigabit Ethernet<br/>Primary Interface]
+            LoopbackInterface[lo<br/>127.0.0.1<br/>Loopback]
+        end
+        
+        subgraph "Service Ports"
+            ModelPorts[Model Services<br/>11400-11500<br/>vLLM API Endpoints]
+            HealthPorts[Health Check<br/>8000-8001<br/>Status APIs]
+            MonitorPorts[Monitoring<br/>9090, 3000, 9093<br/>Prometheus Stack]
+            WebPorts[Web Services<br/>80, 443<br/>HTTP/HTTPS]
+        end
+    end
+    
+    subgraph "Client Access Patterns"
+        LocalClients[Local Clients<br/>192.168.10.0/24<br/>Internal Network]
+        RemoteClients[Remote Clients<br/>VPN Connected<br/>Secure Access]
+        APIClients[API Clients<br/>Direct Port Access<br/>11400-11500]
+        WebClients[Web Clients<br/>Browser Access<br/>Dashboard UI]
+    end
+    
+    subgraph "Service Discovery & Load Balancing"
+        ServiceRegistry[Service Registry<br/>Port-based Discovery<br/>Model → Port Mapping]
+        LoadBalancer[Load Balancer<br/>HAProxy/Nginx<br/>Request Distribution]
+        HealthChecker[Health Checker<br/>Service Availability<br/>Failover Detection]
+    end
+    
+    subgraph "Security & Firewall"
+        Firewall[UFW Firewall<br/>Port Restrictions<br/>Access Control]
+        SSHAccess[SSH Access<br/>Port 22<br/>Administrative]
+        TLSTermination[TLS Termination<br/>SSL Certificates<br/>HTTPS Encryption]
+    end
+    
+    subgraph "Monitoring Network"
+        PrometheusEndpoint[Prometheus<br/>192.168.10.36:9090<br/>Metrics Collection]
+        GrafanaEndpoint[Grafana<br/>192.168.10.36:3000<br/>Dashboard Access]
+        AlertManagerEndpoint[AlertManager<br/>192.168.10.36:9093<br/>Alert Routing]
+    end
+    
+    subgraph "Model Service Endpoints"
+        MixtralEndpoint[Mixtral Service<br/>192.168.10.36:11400<br/>8x7B Model]
+        HermesEndpoint[Hermes Service<br/>192.168.10.36:11401<br/>Mixtral DPO]
+        OpenChatEndpoint[OpenChat Service<br/>192.168.10.36:11402<br/>3.5-1210]
+        Phi3Endpoint[Phi-3 Service<br/>192.168.10.36:11403<br/>Mini 128k]
+        Yi34BEndpoint[Yi-34B Service<br/>192.168.10.36:11404<br/>Chat Model]
+        CoderEndpoint[Coder Service<br/>192.168.10.36:11405<br/>DeepSeek 14B]
+        VisionEndpoint[Vision Service<br/>192.168.10.36:11500<br/>Multimodal]
+    end
+    
+    %% External Connectivity
+    Internet --> Router
+    VPN --> Router
+    ExternalAPI --> Router
+    
+    %% Internal Network Infrastructure
+    Router --> Switch
+    Switch --> DNS
+    Switch --> NTP
+    Switch --> ServerNode
+    
+    %% Server Network Configuration
+    ServerNode --> EthInterface
+    ServerNode --> LoopbackInterface
+    EthInterface --> Switch
+    
+    %% Service Port Mapping
+    ServerNode --> ModelPorts
+    ServerNode --> HealthPorts
+    ServerNode --> MonitorPorts
+    ServerNode --> WebPorts
+    
+    %% Client Access
+    LocalClients --> Switch
+    RemoteClients --> VPN
+    APIClients --> ModelPorts
+    WebClients --> WebPorts
+    
+    %% Service Discovery
+    ModelPorts --> ServiceRegistry
+    ServiceRegistry --> LoadBalancer
+    HealthPorts --> HealthChecker
+    HealthChecker --> LoadBalancer
+    
+    %% Security Layer
+    EthInterface --> Firewall
+    Firewall --> SSHAccess
+    WebPorts --> TLSTermination
+    
+    %% Monitoring Endpoints
+    MonitorPorts --> PrometheusEndpoint
+    MonitorPorts --> GrafanaEndpoint
+    MonitorPorts --> AlertManagerEndpoint
+    
+    %% Model Service Distribution
+    ModelPorts --> MixtralEndpoint
+    ModelPorts --> HermesEndpoint
+    ModelPorts --> OpenChatEndpoint
+    ModelPorts --> Phi3Endpoint
+    ModelPorts --> Yi34BEndpoint
+    ModelPorts --> CoderEndpoint
+    ModelPorts --> VisionEndpoint
+    
+    %% Load Balancer to Services
+    LoadBalancer --> MixtralEndpoint
+    LoadBalancer --> HermesEndpoint
+    LoadBalancer --> OpenChatEndpoint
+    LoadBalancer --> Phi3Endpoint
+    LoadBalancer --> Yi34BEndpoint
+    LoadBalancer --> CoderEndpoint
+    LoadBalancer --> VisionEndpoint
+    
+    %% External Model Downloads
+    ExternalAPI --> MixtralEndpoint
+    ExternalAPI --> HermesEndpoint
+    ExternalAPI --> OpenChatEndpoint
+    ExternalAPI --> Phi3Endpoint
+    ExternalAPI --> Yi34BEndpoint
+    ExternalAPI --> CoderEndpoint
+    ExternalAPI --> VisionEndpoint
+    
+    %% Monitoring Access
+    LocalClients --> PrometheusEndpoint
+    LocalClients --> GrafanaEndpoint
+    RemoteClients --> GrafanaEndpoint
+    
+    %% Network Flow Annotations
+    APIClients -.->|"HTTP POST<br/>/v1/chat/completions"| MixtralEndpoint
+    LoadBalancer -.->|"Round Robin<br/>Health-based Routing"| ModelPorts
+    HealthChecker -.->|"HTTP GET<br/>/health"| HealthPorts
+    PrometheusEndpoint -.->|"Metrics Scraping<br/>HTTP GET /metrics"| ModelPorts
+    
+    %% Styling
+    classDef externalLayer fill:#ffebee
+    classDef networkLayer fill:#e1f5fe
+    classDef serverLayer fill:#f3e5f5
+    classDef interfaceLayer fill:#fff3e0
+    classDef portLayer fill:#e8f5e8
+    classDef clientLayer fill:#f9fbe7
+    classDef serviceLayer fill:#fff8e1
+    classDef securityLayer fill:#fce4ec
+    classDef monitorLayer fill:#f3e5f5
+    classDef endpointLayer fill:#e0f2f1
+    
+    class Internet,VPN,ExternalAPI externalLayer
+    class Router,Switch,DNS,NTP networkLayer
+    class ServerNode serverLayer
+    class EthInterface,LoopbackInterface interfaceLayer
+    class ModelPorts,HealthPorts,MonitorPorts,WebPorts portLayer
+    class LocalClients,RemoteClients,APIClients,WebClients clientLayer
+    class ServiceRegistry,LoadBalancer,HealthChecker serviceLayer
+    class Firewall,SSHAccess,TLSTermination securityLayer
+    class PrometheusEndpoint,GrafanaEndpoint,AlertManagerEndpoint monitorLayer
+    class MixtralEndpoint,HermesEndpoint,OpenChatEndpoint,Phi3Endpoint,Yi34BEndpoint,CoderEndpoint,VisionEndpoint endpointLayer

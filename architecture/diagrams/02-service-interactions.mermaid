@@ -1,0 +1,133 @@
+graph TB
+    subgraph "Service Management Layer"
+        SystemDTarget[citadel-ai.target<br/>Main Service Target]
+        ServiceManager[Service Manager<br/>Health Monitoring]
+    end
+    
+    subgraph "Model Services"
+        MixtralSvc[citadel-mixtral.service<br/>Port 11400<br/>Mixtral-8x7B-Instruct]
+        HermesSvc[citadel-hermes.service<br/>Port 11401<br/>Nous-Hermes-2-Mixtral]
+        OpenChatSvc[citadel-openchat.service<br/>Port 11402<br/>openchat-3.5-1210]
+        Phi3Svc[citadel-phi3.service<br/>Port 11403<br/>Phi-3-mini-128k]
+        Yi34BSvc[citadel-yi34b.service<br/>Port 11404<br/>Yi-34B-Chat]
+        CoderSvc[citadel-coder.service<br/>Port 11405<br/>deepseek-coder-14b]
+        VisionSvc[citadel-vision.service<br/>Port 11500<br/>imp-v1_5-7b]
+    end
+    
+    subgraph "Storage Services"
+        StorageOrchSvc[citadel-storage.service<br/>Storage Orchestrator]
+        StorageMonSvc[citadel-storage-monitor.service<br/>Health Monitoring]
+        BackupSvc[citadel-backup.service<br/>Automated Backups]
+    end
+    
+    subgraph "Monitoring Services"
+        PrometheusSvc[prometheus.service<br/>Metrics Collection<br/>Port 9090]
+        GrafanaSvc[grafana.service<br/>Visualization<br/>Port 3000]
+        AlertManagerSvc[alertmanager.service<br/>Alerting<br/>Port 9093]
+    end
+    
+    subgraph "Configuration Layer"
+        VLLMConfig[vLLM Settings<br/>Pydantic Config<br/>GPU/Model Settings]
+        StorageConfig[Storage Settings<br/>Paths/Symlinks<br/>Backup Policies]
+        ServiceConfig[Service Config<br/>SystemD Units<br/>Dependencies]
+    end
+    
+    subgraph "vLLM Process Layer"
+        MixtralProc[vLLM Process<br/>PID: mixtral<br/>GPU Memory: 14GB]
+        HermesProc[vLLM Process<br/>PID: hermes<br/>GPU Memory: 14GB]
+        OpenChatProc[vLLM Process<br/>PID: openchat<br/>GPU Memory: 7GB]
+        Phi3Proc[vLLM Process<br/>PID: phi3<br/>GPU Memory: 4GB]
+        Yi34BProc[vLLM Process<br/>PID: yi34b<br/>GPU Memory: 16GB]
+        CoderProc[vLLM Process<br/>PID: coder<br/>GPU Memory: 14GB]
+        VisionProc[vLLM Process<br/>PID: vision<br/>GPU Memory: 8GB]
+    end
+    
+    subgraph "Health Check Layer"
+        HealthEndpoints[Health Check Endpoints<br/>HTTP Status APIs<br/>Ports 8000-8001]
+        ProcessMonitor[Process Monitor<br/>PID Tracking<br/>Resource Usage]
+        ServiceWatchdog[Service Watchdog<br/>Auto Restart<br/>Failure Recovery]
+    end
+    
+    %% Service Management
+    SystemDTarget --> MixtralSvc
+    SystemDTarget --> HermesSvc
+    SystemDTarget --> OpenChatSvc
+    SystemDTarget --> Phi3Svc
+    SystemDTarget --> Yi34BSvc
+    SystemDTarget --> CoderSvc
+    SystemDTarget --> VisionSvc
+    
+    SystemDTarget --> StorageOrchSvc
+    SystemDTarget --> StorageMonSvc
+    SystemDTarget --> BackupSvc
+    
+    %% Configuration Dependencies
+    VLLMConfig --> MixtralSvc
+    VLLMConfig --> HermesSvc
+    VLLMConfig --> OpenChatSvc
+    VLLMConfig --> Phi3Svc
+    VLLMConfig --> Yi34BSvc
+    VLLMConfig --> CoderSvc
+    VLLMConfig --> VisionSvc
+    
+    StorageConfig --> StorageOrchSvc
+    StorageConfig --> StorageMonSvc
+    StorageConfig --> BackupSvc
+    
+    ServiceConfig --> SystemDTarget
+    
+    %% Service to Process
+    MixtralSvc --> MixtralProc
+    HermesSvc --> HermesProc
+    OpenChatSvc --> OpenChatProc
+    Phi3Svc --> Phi3Proc
+    Yi34BSvc --> Yi34BProc
+    CoderSvc --> CoderProc
+    VisionSvc --> VisionProc
+    
+    %% Storage Dependencies
+    StorageOrchSvc --> MixtralSvc
+    StorageOrchSvc --> HermesSvc
+    StorageOrchSvc --> OpenChatSvc
+    StorageOrchSvc --> Phi3Svc
+    StorageOrchSvc --> Yi34BSvc
+    StorageOrchSvc --> CoderSvc
+    StorageOrchSvc --> VisionSvc
+    
+    %% Health Monitoring
+    MixtralProc --> HealthEndpoints
+    HermesProc --> HealthEndpoints
+    OpenChatProc --> HealthEndpoints
+    Phi3Proc --> HealthEndpoints
+    Yi34BProc --> HealthEndpoints
+    CoderProc --> HealthEndpoints
+    VisionProc --> HealthEndpoints
+    
+    HealthEndpoints --> ProcessMonitor
+    ProcessMonitor --> ServiceWatchdog
+    ServiceWatchdog --> ServiceManager
+    
+    %% Monitoring Integration
+    HealthEndpoints --> PrometheusSvc
+    StorageMonSvc --> PrometheusSvc
+    ProcessMonitor --> PrometheusSvc
+    
+    PrometheusSvc --> GrafanaSvc
+    PrometheusSvc --> AlertManagerSvc
+    
+    %% Service Manager Control
+    ServiceManager --> SystemDTarget
+    ServiceManager --> ServiceWatchdog
+    
+    %% Styling
+    classDef serviceLayer fill:#e1f5fe
+    classDef processLayer fill:#fff3e0
+    classDef configLayer fill:#f3e5f5
+    classDef monitorLayer fill:#e8f5e8
+    classDef storageLayer fill:#fff8e1
+    
+    class MixtralSvc,HermesSvc,OpenChatSvc,Phi3Svc,Yi34BSvc,CoderSvc,VisionSvc serviceLayer
+    class MixtralProc,HermesProc,OpenChatProc,Phi3Proc,Yi34BProc,CoderProc,VisionProc processLayer
+    class VLLMConfig,StorageConfig,ServiceConfig configLayer
+    class HealthEndpoints,ProcessMonitor,ServiceWatchdog,PrometheusSvc,GrafanaSvc,AlertManagerSvc monitorLayer
+    class StorageOrchSvc,StorageMonSvc,BackupSvc storageLayer

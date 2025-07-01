@@ -1,0 +1,126 @@
+graph TB
+    subgraph "Client Request Flow"
+        Client[Client Application<br/>REST API Request]
+        LoadBalancer[Load Balancer<br/>Port Distribution]
+        ModelRouter[Model Router<br/>Request Routing]
+    end
+    
+    subgraph "Request Processing"
+        RequestValidator[Request Validator<br/>Input Validation<br/>Rate Limiting]
+        TokenProcessor[Token Processor<br/>Input Tokenization<br/>Prompt Processing]
+        ContextManager[Context Manager<br/>Context Window<br/>Conversation History]
+    end
+    
+    subgraph "vLLM Engine Pipeline"
+        ModelLoader[Model Loader<br/>Model Selection<br/>GPU Assignment]
+        AttentionEngine[Attention Engine<br/>Flash Attention 2<br/>Optimized Computation]
+        KVCacheManager[KV Cache Manager<br/>Memory Management<br/>Cache Optimization]
+        TokenGenerator[Token Generator<br/>Autoregressive Generation<br/>Sampling/Decoding]
+    end
+    
+    subgraph "GPU Processing"
+        GPUScheduler[GPU Scheduler<br/>Batch Processing<br/>Memory Allocation]
+        CUDAKernels[CUDA Kernels<br/>Matrix Operations<br/>Attention Computation]
+        MemoryManager[Memory Manager<br/>16GB VRAM<br/>Dynamic Allocation]
+    end
+    
+    subgraph "Storage Access"
+        ModelFiles[Model Files<br/>3.6TB NVMe<br/>Weights & Config]
+        CacheAccess[Cache Access<br/>KV Cache Storage<br/>Fast Retrieval]
+        ConfigAccess[Config Access<br/>Model Parameters<br/>Generation Settings]
+    end
+    
+    subgraph "Response Processing"
+        TokenDecoder[Token Decoder<br/>Token to Text<br/>Post-processing]
+        ResponseFormatter[Response Formatter<br/>JSON Formatting<br/>OpenAI Compatible]
+        StreamHandler[Stream Handler<br/>Real-time Streaming<br/>SSE Support]
+    end
+    
+    subgraph "Monitoring & Logging"
+        MetricsCollector[Metrics Collector<br/>Performance Stats<br/>Usage Tracking]
+        HealthTracker[Health Tracker<br/>Service Status<br/>Error Monitoring]
+        LogAggregator[Log Aggregator<br/>Request Logging<br/>Debug Information]
+    end
+    
+    %% Client Request Flow
+    Client --> LoadBalancer
+    LoadBalancer --> ModelRouter
+    ModelRouter --> RequestValidator
+    
+    %% Request Processing
+    RequestValidator --> TokenProcessor
+    TokenProcessor --> ContextManager
+    ContextManager --> ModelLoader
+    
+    %% vLLM Engine Pipeline
+    ModelLoader --> AttentionEngine
+    AttentionEngine --> KVCacheManager
+    KVCacheManager --> TokenGenerator
+    
+    %% GPU Processing
+    AttentionEngine --> GPUScheduler
+    KVCacheManager --> GPUScheduler
+    TokenGenerator --> GPUScheduler
+    GPUScheduler --> CUDAKernels
+    CUDAKernels --> MemoryManager
+    
+    %% Storage Access
+    ModelLoader --> ModelFiles
+    KVCacheManager --> CacheAccess
+    ModelLoader --> ConfigAccess
+    
+    %% Response Generation
+    TokenGenerator --> TokenDecoder
+    TokenDecoder --> ResponseFormatter
+    ResponseFormatter --> StreamHandler
+    StreamHandler --> Client
+    
+    %% Monitoring Integration
+    RequestValidator --> MetricsCollector
+    ModelLoader --> HealthTracker
+    AttentionEngine --> MetricsCollector
+    TokenGenerator --> MetricsCollector
+    GPUScheduler --> HealthTracker
+    
+    %% Logging
+    RequestValidator --> LogAggregator
+    TokenProcessor --> LogAggregator
+    ModelLoader --> LogAggregator
+    TokenGenerator --> LogAggregator
+    ResponseFormatter --> LogAggregator
+    
+    %% Performance Feedback Loops
+    MetricsCollector --> GPUScheduler
+    HealthTracker --> ModelLoader
+    MemoryManager --> KVCacheManager
+    
+    %% Configuration Flow
+    ConfigAccess --> RequestValidator
+    ConfigAccess --> TokenProcessor
+    ConfigAccess --> AttentionEngine
+    ConfigAccess --> TokenGenerator
+    
+    %% Data Flow Annotations
+    Client -.->|"HTTP POST<br/>/v1/chat/completions"| LoadBalancer
+    LoadBalancer -.->|"Route by Model<br/>Ports 11400-11500"| ModelRouter
+    TokenProcessor -.->|"Tokenized Input<br/>Attention Mask"| ContextManager
+    AttentionEngine -.->|"Attention Scores<br/>Hidden States"| KVCacheManager
+    TokenGenerator -.->|"Generated Tokens<br/>Logits/Probabilities"| TokenDecoder
+    StreamHandler -.->|"SSE Stream<br/>JSON Response"| Client
+    
+    %% Styling
+    classDef clientLayer fill:#e1f5fe
+    classDef processLayer fill:#fff3e0
+    classDef engineLayer fill:#f3e5f5
+    classDef gpuLayer fill:#ffebee
+    classDef storageLayer fill:#e8f5e8
+    classDef responseLayer fill:#f9fbe7
+    classDef monitorLayer fill:#fff8e1
+    
+    class Client,LoadBalancer,ModelRouter clientLayer
+    class RequestValidator,TokenProcessor,ContextManager processLayer
+    class ModelLoader,AttentionEngine,KVCacheManager,TokenGenerator engineLayer
+    class GPUScheduler,CUDAKernels,MemoryManager gpuLayer
+    class ModelFiles,CacheAccess,ConfigAccess storageLayer
+    class TokenDecoder,ResponseFormatter,StreamHandler responseLayer
+    class MetricsCollector,HealthTracker,LogAggregator monitorLayer

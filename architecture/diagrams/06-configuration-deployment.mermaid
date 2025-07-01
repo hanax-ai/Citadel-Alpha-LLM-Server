@@ -1,0 +1,171 @@
+graph TB
+    subgraph "Configuration Sources"
+        EnvFile[.env File<br/>Environment Variables<br/>Local Development]
+        SystemEnv[System Environment<br/>Production Variables<br/>CI/CD Integration]
+        ConfigFiles[Configuration Files<br/>YAML/JSON Settings<br/>Structured Config]
+        DefaultValues[Default Values<br/>Pydantic Defaults<br/>Fallback Settings]
+    end
+    
+    subgraph "Pydantic Configuration Layer"
+        VLLMSettings[VLLMSettings<br/>Model Configuration<br/>GPU Parameters]
+        StorageSettings[StorageSettings<br/>Path Configuration<br/>Backup Policies]
+        ServiceSettings[ServiceSettings<br/>SystemD Configuration<br/>Port Allocation]
+        MonitoringSettings[MonitoringSettings<br/>Metrics Configuration<br/>Alert Thresholds]
+    end
+    
+    subgraph "Configuration Validation"
+        TypeValidator[Type Validator<br/>Pydantic Types<br/>Range Validation]
+        PathValidator[Path Validator<br/>Directory Existence<br/>Permission Checks]
+        ResourceValidator[Resource Validator<br/>GPU Memory Limits<br/>Storage Capacity]
+        NetworkValidator[Network Validator<br/>Port Availability<br/>Connectivity]
+    end
+    
+    subgraph "Environment Generation"
+        EnvGenerator[Environment Generator<br/>Shell Script Creation<br/>Variable Export]
+        ConfigMerger[Config Merger<br/>Setting Inheritance<br/>Override Resolution]
+        TemplateProcessor[Template Processor<br/>Dynamic Configuration<br/>Value Substitution]
+    end
+    
+    subgraph "Deployment Pipeline"
+        PreDeployment[Pre-deployment<br/>System Prerequisites<br/>Dependency Validation]
+        StorageSetup[Storage Setup<br/>Directory Creation<br/>Symlink Management]
+        ServiceDeployment[Service Deployment<br/>SystemD Installation<br/>Service Registration]
+        PostDeployment[Post-deployment<br/>Health Verification<br/>Integration Testing]
+    end
+    
+    subgraph "Service Configuration"
+        SystemDUnits[SystemD Units<br/>Service Definitions<br/>Dependency Management]
+        ServiceFiles[Service Files<br/>ExecStart Commands<br/>Environment Files]
+        TargetConfig[Target Configuration<br/>citadel-ai.target<br/>Service Orchestration]
+    end
+    
+    subgraph "Model Management"
+        ModelRegistry[Model Registry<br/>Available Models<br/>Version Tracking]
+        ModelDownloader[Model Downloader<br/>HuggingFace Hub<br/>Local Storage]
+        ModelValidator[Model Validator<br/>File Integrity<br/>Compatibility Check]
+        ModelDeployer[Model Deployer<br/>Symlink Creation<br/>Service Assignment]
+    end
+    
+    subgraph "Monitoring Configuration"
+        PrometheusConfig[Prometheus Config<br/>Scrape Targets<br/>Retention Policies]
+        GrafanaConfig[Grafana Config<br/>Dashboard Definitions<br/>Data Sources]
+        AlertConfig[Alert Configuration<br/>Rule Definitions<br/>Notification Setup]
+    end
+    
+    subgraph "Runtime Management"
+        ConfigReloader[Config Reloader<br/>Hot Reload Support<br/>Service Restart]
+        HealthChecker[Health Checker<br/>Configuration Drift<br/>Compliance Monitoring]
+        UpdateManager[Update Manager<br/>Rolling Updates<br/>Rollback Support]
+    end
+    
+    subgraph "Operational Tools"
+        CLI[Management CLI<br/>Configuration Commands<br/>Deployment Scripts]
+        WebInterface[Web Interface<br/>Configuration UI<br/>Status Dashboard]
+        Orchestrator[Storage Orchestrator<br/>Automated Setup<br/>System Management]
+    end
+    
+    %% Configuration Sources to Pydantic
+    EnvFile --> VLLMSettings
+    EnvFile --> StorageSettings
+    EnvFile --> ServiceSettings
+    EnvFile --> MonitoringSettings
+    
+    SystemEnv --> VLLMSettings
+    SystemEnv --> StorageSettings
+    SystemEnv --> ServiceSettings
+    SystemEnv --> MonitoringSettings
+    
+    ConfigFiles --> VLLMSettings
+    ConfigFiles --> StorageSettings
+    
+    DefaultValues --> VLLMSettings
+    DefaultValues --> StorageSettings
+    DefaultValues --> ServiceSettings
+    DefaultValues --> MonitoringSettings
+    
+    %% Configuration Validation
+    VLLMSettings --> TypeValidator
+    VLLMSettings --> ResourceValidator
+    StorageSettings --> PathValidator
+    ServiceSettings --> NetworkValidator
+    
+    %% Environment Generation
+    VLLMSettings --> ConfigMerger
+    StorageSettings --> ConfigMerger
+    ServiceSettings --> ConfigMerger
+    MonitoringSettings --> ConfigMerger
+    
+    ConfigMerger --> EnvGenerator
+    ConfigMerger --> TemplateProcessor
+    
+    %% Deployment Pipeline
+    TypeValidator --> PreDeployment
+    PathValidator --> PreDeployment
+    ResourceValidator --> PreDeployment
+    NetworkValidator --> PreDeployment
+    
+    PreDeployment --> StorageSetup
+    StorageSetup --> ServiceDeployment
+    ServiceDeployment --> PostDeployment
+    
+    %% Service Configuration
+    EnvGenerator --> ServiceFiles
+    TemplateProcessor --> SystemDUnits
+    ServiceFiles --> TargetConfig
+    SystemDUnits --> TargetConfig
+    
+    %% Model Management Pipeline
+    ModelRegistry --> ModelDownloader
+    ModelDownloader --> ModelValidator
+    ModelValidator --> ModelDeployer
+    ModelDeployer --> StorageSetup
+    
+    %% Monitoring Configuration
+    MonitoringSettings --> PrometheusConfig
+    MonitoringSettings --> GrafanaConfig
+    MonitoringSettings --> AlertConfig
+    
+    %% Runtime Management
+    ConfigMerger --> ConfigReloader
+    ServiceDeployment --> HealthChecker
+    PostDeployment --> UpdateManager
+    
+    %% Operational Tools
+    ConfigMerger --> CLI
+    HealthChecker --> WebInterface
+    StorageSetup --> Orchestrator
+    ServiceDeployment --> Orchestrator
+    
+    %% Cross-Integration
+    Orchestrator --> CLI
+    CLI --> ConfigReloader
+    WebInterface --> UpdateManager
+    
+    %% Data Flow Annotations
+    EnvFile -.->|"VLLM_GPU_MEMORY=0.9<br/>CITADEL_MODELS_ROOT=/mnt"| VLLMSettings
+    ConfigMerger -.->|"export statements<br/>shell variables"| EnvGenerator
+    ModelDownloader -.->|"wget/git clone<br/>HuggingFace Hub"| ModelValidator
+    SystemDUnits -.->|"systemctl enable<br/>service activation"| TargetConfig
+    
+    %% Styling
+    classDef sourceLayer fill:#e1f5fe
+    classDef configLayer fill:#f3e5f5
+    classDef validationLayer fill:#fff3e0
+    classDef generationLayer fill:#e8f5e8
+    classDef deploymentLayer fill:#f9fbe7
+    classDef serviceLayer fill:#fff8e1
+    classDef modelLayer fill:#ffebee
+    classDef monitorLayer fill:#fce4ec
+    classDef runtimeLayer fill:#f3e5f5
+    classDef toolLayer fill:#e0f2f1
+    
+    class EnvFile,SystemEnv,ConfigFiles,DefaultValues sourceLayer
+    class VLLMSettings,StorageSettings,ServiceSettings,MonitoringSettings configLayer
+    class TypeValidator,PathValidator,ResourceValidator,NetworkValidator validationLayer
+    class EnvGenerator,ConfigMerger,TemplateProcessor generationLayer
+    class PreDeployment,StorageSetup,ServiceDeployment,PostDeployment deploymentLayer
+    class SystemDUnits,ServiceFiles,TargetConfig serviceLayer
+    class ModelRegistry,ModelDownloader,ModelValidator,ModelDeployer modelLayer
+    class PrometheusConfig,GrafanaConfig,AlertConfig monitorLayer
+    class ConfigReloader,HealthChecker,UpdateManager runtimeLayer
+    class CLI,WebInterface,Orchestrator toolLayer

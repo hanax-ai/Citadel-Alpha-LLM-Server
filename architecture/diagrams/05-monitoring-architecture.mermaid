@@ -1,0 +1,161 @@
+graph TB
+    subgraph "Application Health Sources"
+        VLLMServices[vLLM Services<br/>Model Servers<br/>Ports 11400-11500]
+        StorageServices[Storage Services<br/>Storage Monitor<br/>Backup Manager]
+        SystemServices[System Services<br/>SystemD Units<br/>citadel-ai.target]
+        HealthEndpoints[Health Endpoints<br/>HTTP Status APIs<br/>Ports 8000-8001]
+    end
+    
+    subgraph "Metrics Collection Layer"
+        PrometheusExporter[Prometheus Exporter<br/>Python Metrics<br/>Custom Collectors]
+        NodeExporter[Node Exporter<br/>System Metrics<br/>Hardware Stats]
+        GPUExporter[GPU Exporter<br/>NVIDIA SMI<br/>CUDA Metrics]
+        ProcessExporter[Process Exporter<br/>Service PIDs<br/>Resource Usage]
+    end
+    
+    subgraph "System Resource Monitoring"
+        CPUMonitor[CPU Monitor<br/>Utilization & Load<br/>Per-Core Metrics]
+        MemoryMonitor[Memory Monitor<br/>Usage & Availability<br/>Swap Monitoring]
+        DiskMonitor[Disk Monitor<br/>Space & I/O<br/>SMART Health]
+        NetworkMonitor[Network Monitor<br/>Bandwidth & Latency<br/>Connection Stats]
+    end
+    
+    subgraph "GPU Resource Monitoring"
+        GPUUtilization[GPU Utilization<br/>Compute & Memory<br/>Real-time Metrics]
+        VRAMMonitor[VRAM Monitor<br/>16GB Allocation<br/>Model Memory Usage]
+        ThermalMonitor[Thermal Monitor<br/>Temperature Tracking<br/>Throttling Detection]
+        PowerMonitor[Power Monitor<br/>Power Consumption<br/>Performance States]
+    end
+    
+    subgraph "Application Metrics"
+        RequestMetrics[Request Metrics<br/>Latency & Throughput<br/>Error Rates]
+        ModelMetrics[Model Metrics<br/>Inference Times<br/>Token Generation]
+        CacheMetrics[Cache Metrics<br/>Hit Rates<br/>Memory Efficiency]
+        ServiceMetrics[Service Metrics<br/>Uptime & Health<br/>Restart Counts]
+    end
+    
+    subgraph "Storage Metrics"
+        StorageHealth[Storage Health<br/>Disk Usage<br/>Performance Stats]
+        BackupMetrics[Backup Metrics<br/>Success Rates<br/>Integrity Status]
+        SymlinkHealth[Symlink Health<br/>Broken Links<br/>Repair Actions]
+        IOMetrics[I/O Metrics<br/>Latency & IOPS<br/>Throughput]
+    end
+    
+    subgraph "Prometheus Stack"
+        PrometheusServer[Prometheus Server<br/>192.168.10.36:9090<br/>Metrics Storage]
+        PrometheusConfig[Prometheus Config<br/>Scrape Targets<br/>Alert Rules]
+        PrometheusStorage[Prometheus Storage<br/>Time Series DB<br/>Retention Policies]
+    end
+    
+    subgraph "Visualization Layer"
+        GrafanaDashboard[Grafana Dashboards<br/>192.168.10.36:3000<br/>Visual Analytics]
+        SystemDashboard[System Dashboard<br/>Infrastructure Overview<br/>Resource Utilization]
+        ModelDashboard[Model Dashboard<br/>LLM Performance<br/>Inference Metrics]
+        StorageDashboard[Storage Dashboard<br/>Storage Health<br/>Backup Status]
+    end
+    
+    subgraph "Alerting System"
+        AlertManager[AlertManager<br/>192.168.10.36:9093<br/>Alert Processing]
+        AlertRules[Alert Rules<br/>Threshold Definitions<br/>Severity Levels]
+        NotificationChannels[Notification Channels<br/>Slack/Email/Webhook<br/>Escalation Policies]
+    end
+    
+    subgraph "Log Aggregation"
+        ApplicationLogs[Application Logs<br/>vLLM Server Logs<br/>Error Tracking]
+        SystemLogs[System Logs<br/>SystemD Journals<br/>Kernel Messages]
+        AuditLogs[Audit Logs<br/>Security Events<br/>Access Tracking]
+        LogRotation[Log Rotation<br/>Automated Cleanup<br/>Retention Policies]
+    end
+    
+    %% Health Sources to Metrics Collection
+    VLLMServices --> PrometheusExporter
+    StorageServices --> PrometheusExporter
+    SystemServices --> NodeExporter
+    HealthEndpoints --> PrometheusExporter
+    
+    %% System Resource Monitoring
+    NodeExporter --> CPUMonitor
+    NodeExporter --> MemoryMonitor
+    NodeExporter --> DiskMonitor
+    NodeExporter --> NetworkMonitor
+    
+    %% GPU Monitoring
+    GPUExporter --> GPUUtilization
+    GPUExporter --> VRAMMonitor
+    GPUExporter --> ThermalMonitor
+    GPUExporter --> PowerMonitor
+    
+    %% Application Metrics Collection
+    VLLMServices --> RequestMetrics
+    VLLMServices --> ModelMetrics
+    VLLMServices --> CacheMetrics
+    SystemServices --> ServiceMetrics
+    
+    %% Storage Metrics Collection
+    StorageServices --> StorageHealth
+    StorageServices --> BackupMetrics
+    StorageServices --> SymlinkHealth
+    DiskMonitor --> IOMetrics
+    
+    %% Metrics to Prometheus
+    PrometheusExporter --> PrometheusServer
+    NodeExporter --> PrometheusServer
+    GPUExporter --> PrometheusServer
+    ProcessExporter --> PrometheusServer
+    
+    %% Prometheus Configuration
+    PrometheusConfig --> PrometheusServer
+    PrometheusServer --> PrometheusStorage
+    
+    %% Grafana Integration
+    PrometheusServer --> GrafanaDashboard
+    GrafanaDashboard --> SystemDashboard
+    GrafanaDashboard --> ModelDashboard
+    GrafanaDashboard --> StorageDashboard
+    
+    %% Alerting Pipeline
+    PrometheusServer --> AlertManager
+    AlertRules --> AlertManager
+    AlertManager --> NotificationChannels
+    
+    %% Log Collection
+    VLLMServices --> ApplicationLogs
+    SystemServices --> SystemLogs
+    SystemServices --> AuditLogs
+    ApplicationLogs --> LogRotation
+    SystemLogs --> LogRotation
+    
+    %% Cross-Layer Integration
+    RequestMetrics --> ModelDashboard
+    StorageHealth --> StorageDashboard
+    GPUUtilization --> SystemDashboard
+    ServiceMetrics --> SystemDashboard
+    
+    %% Alert Sources
+    CPUMonitor --> AlertRules
+    MemoryMonitor --> AlertRules
+    GPUUtilization --> AlertRules
+    StorageHealth --> AlertRules
+    ServiceMetrics --> AlertRules
+    
+    %% Data Flow Annotations
+    VLLMServices -.->|"HTTP /metrics<br/>Prometheus Format"| PrometheusExporter
+    PrometheusServer -.->|"Query API<br/>PromQL"| GrafanaDashboard
+    AlertManager -.->|"Webhook/SMTP<br/>Notifications"| NotificationChannels
+    
+    %% Styling
+    classDef sourceLayer fill:#e1f5fe
+    classDef collectionLayer fill:#f3e5f5
+    classDef monitorLayer fill:#fff3e0
+    classDef prometheusLayer fill:#e8f5e8
+    classDef visualLayer fill:#f9fbe7
+    classDef alertLayer fill:#ffebee
+    classDef logLayer fill:#fff8e1
+    
+    class VLLMServices,StorageServices,SystemServices,HealthEndpoints sourceLayer
+    class PrometheusExporter,NodeExporter,GPUExporter,ProcessExporter collectionLayer
+    class CPUMonitor,MemoryMonitor,DiskMonitor,NetworkMonitor,GPUUtilization,VRAMMonitor,ThermalMonitor,PowerMonitor monitorLayer
+    class PrometheusServer,PrometheusConfig,PrometheusStorage prometheusLayer
+    class GrafanaDashboard,SystemDashboard,ModelDashboard,StorageDashboard visualLayer
+    class AlertManager,AlertRules,NotificationChannels alertLayer
+    class ApplicationLogs,SystemLogs,AuditLogs,LogRotation logLayer

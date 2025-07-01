@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Test suite for storage monitoring functionality
+Test suite for storage monitoring functionality 
 """
 
 import pytest

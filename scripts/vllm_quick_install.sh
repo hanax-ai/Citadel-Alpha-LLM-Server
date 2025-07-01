@@ -1,5 +1,5 @@
 #!/bin/bash
-# PLANB-05: Quick vLLM Installation with Configuration Management
+# PLANB-05: Quick vLLM Installation with Configuration Management 
 
 set -euo pipefail
 
