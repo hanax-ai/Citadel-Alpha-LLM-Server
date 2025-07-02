@@ -67,9 +67,11 @@ setup_repository() {
         handle_error "Failed to update package lists after PPA addition"
     fi
     
-    # Verify repository addition
-    if ! apt-cache policy python3.12 | grep -q 'deadsnakes'; then
-        handle_error "Python 3.12 repository not properly added"
+    # Verify Python 3.12 is available (either from deadsnakes or Ubuntu repos)
+    if ! apt-cache policy python3.12 | head -1 | grep -q 'python3.12:'; then
+        handle_error "Python 3.12 not available in repositories"
+    else
+        log "✅ Python 3.12 available from repositories"
     fi
     
     log "✅ Repository setup completed successfully"
@@ -261,24 +263,34 @@ EOF
 main() {
     log "Starting PLANB-04a Python 3.12 Installation Module"
     
-    # Execute installation steps with error handling
-    if ! $ERROR_HANDLER execute "Initialization" "initialize_installation" "[ -f '$CONFIG_FILE' ]"; then
+    # Create backup before starting
+    if ! $ERROR_HANDLER backup; then
+        handle_error "Failed to create backup"
+    fi
+    
+    # Execute installation steps directly with error handling
+    log "Step 1: Initialization"
+    if ! initialize_installation; then
         handle_error "Initialization failed"
     fi
     
-    if ! $ERROR_HANDLER execute "Repository Setup" "setup_repository" "apt-cache policy python3.12 | grep -q 'deadsnakes'"; then
+    log "Step 2: Repository Setup"
+    if ! setup_repository; then
         handle_error "Repository setup failed"
     fi
     
-    if ! $ERROR_HANDLER execute "Python Installation" "install_python312" "python3.12 --version"; then
+    log "Step 3: Python Installation"
+    if ! install_python312; then
         handle_error "Python installation failed"
     fi
     
-    if ! $ERROR_HANDLER execute "Pip Installation" "install_pip312" "python3.12 -m pip --version"; then
+    log "Step 4: Pip Installation"
+    if ! install_pip312; then
         handle_error "Pip installation failed"
     fi
     
-    if ! $ERROR_HANDLER execute "Alternatives Configuration" "configure_alternatives" "python --version | grep -q '3.12'"; then
+    log "Step 5: Alternatives Configuration"
+    if ! configure_alternatives; then
         handle_error "Alternatives configuration failed"
     fi
     

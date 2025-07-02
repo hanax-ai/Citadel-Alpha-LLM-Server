@@ -32,12 +32,33 @@ This task is implemented using a modular approach with the following components:
 4. **Dependencies Module** ([`PLANB-04c-Dependencies-Optimization.md`](PLANB-04c-Dependencies-Optimization.md))
 5. **Validation Module** ([`PLANB-04d-Validation-Testing.md`](PLANB-04d-Validation-Testing.md))
 
+### Configuration-Driven Design
+The implementation uses a JSON configuration file (`python-config.json`) to drive all installation and setup decisions. This approach provides:
+
+- **Centralized Configuration**: All settings in one location
+- **Version Management**: Easy updates to package versions
+- **Environment Flexibility**: Different configurations for different environments
+- **Reproducible Deployments**: Consistent setups across systems
+- **Maintainability**: Changes require only config updates, not script modifications
+
+### Script Interaction Pattern
+Scripts use the `load_env_config.py` helper to parse JSON configuration and export environment variables:
+```bash
+# Example usage in scripts
+eval "$(python3 /opt/citadel/scripts/load_env_config.py /opt/citadel/configs/python-config.json)"
+```
+
 ## Configuration System
 
 ### Step 1: Create Python Environment Configuration
 
 ```bash
-# Create Python environment configuration
+# Create Python environment configuration (requires root privileges)
+if [ "$EUID" -ne 0 ]; then
+    echo "This script requires root privileges to create system configuration"
+    exit 1
+fi
+
 sudo tee /opt/citadel/configs/python-config.json << 'EOF'
 {
   "python": {
@@ -113,6 +134,29 @@ sudo tee /opt/citadel/configs/python-config.json << 'EOF'
 EOF
 ```
 
+## Security Considerations
+
+### API Token Management
+Before running any scripts, ensure proper token security:
+
+```bash
+# Create secure token file (recommended approach)
+sudo mkdir -p /opt/citadel/configs
+echo "your_huggingface_token_here" | sudo tee /opt/citadel/configs/.hf_token > /dev/null
+sudo chmod 600 /opt/citadel/configs/.hf_token
+sudo chown root:root /opt/citadel/configs/.hf_token
+
+# Alternative: Set environment variable
+export HF_TOKEN="your_huggingface_token_here"
+```
+
+**Security Best Practices:**
+- Never commit tokens to version control
+- Use environment variables or secure config files
+- Restrict file permissions to 600 (owner read/write only)
+- Regularly rotate API tokens
+- Use service accounts with minimal required permissions
+
 ## Prerequisites Validation and Safety Checks
 
 ### Step 2: Create Prerequisites Validation Script
@@ -148,9 +192,18 @@ validate_config() {
         handle_error "Configuration file not found: $CONFIG_FILE"
     fi
     
+    # Validate JSON syntax using python3 (more portable than jq)
     if ! python3 -m json.tool "$CONFIG_FILE" >/dev/null 2>&1; then
         handle_error "Invalid JSON in configuration file: $CONFIG_FILE"
     fi
+    
+    # Validate required configuration sections exist
+    local required_sections=("python" "environments" "optimization" "paths")
+    for section in "${required_sections[@]}"; do
+        if ! python3 -c "import json; data=json.load(open('$CONFIG_FILE')); exit(0 if '$section' in data else 1)" 2>/dev/null; then
+            handle_error "Missing required configuration section: $section"
+        fi
+    done
     
     log "✅ Configuration file validated"
 }
@@ -202,21 +255,52 @@ validate_resources() {
     fi
     
     # Check available memory (need at least 4GB)
-    AVAILABLE_MEMORY=$(free -m | awk 'NR==2{print $7}')
+    # Use $NF to get the last field, which works across different util-linux versions
+    AVAILABLE_MEMORY=$(free -m | awk 'NR==2{print $NF}')
     REQUIRED_MEMORY=4096
     
     if [ "$AVAILABLE_MEMORY" -lt "$REQUIRED_MEMORY" ]; then
         handle_error "Insufficient memory: need 4GB, have ${AVAILABLE_MEMORY}MB available"
     fi
     
-    # Check internet connectivity (basic IP reachability)
-    if ! ping -c 1 8.8.8.8 >/dev/null 2>&1; then
-        handle_error "No internet connectivity - required for package downloads (ping to 8.8.8.8 failed)"
+    # Check internet connectivity with retries and multiple URLs
+    log "Checking internet connectivity..."
+    CONNECTIVITY_OK=false
+    
+    # Primary connectivity check
+    if ping -c 1 -W 5 8.8.8.8 >/dev/null 2>&1; then
+        CONNECTIVITY_OK=true
+    elif ping -c 1 -W 5 1.1.1.1 >/dev/null 2>&1; then
+        CONNECTIVITY_OK=true
+    fi
+    
+    if [ "$CONNECTIVITY_OK" = false ]; then
+        handle_error "No internet connectivity - required for package downloads (ping to 8.8.8.8 and 1.1.1.1 failed)"
     fi
 
-    # Check DNS resolution (pypi.org)
-    if ! curl -I --connect-timeout 5 https://pypi.org >/dev/null 2>&1; then
-        handle_error "DNS resolution or HTTPS connectivity failed for pypi.org - required for Python package installation"
+    # Check package repository access with timeout and retries
+    log "Checking package repository access..."
+    REPO_OK=false
+    
+    # Try PyPI first
+    for attempt in 1 2 3; do
+        if timeout 10 curl -fsSL https://pypi.org >/dev/null 2>&1; then
+            REPO_OK=true
+            break
+        fi
+        [ $attempt -lt 3 ] && sleep 2
+    done
+    
+    # Fallback to apt repositories if PyPI fails
+    if [ "$REPO_OK" = false ]; then
+        log "PyPI unreachable, checking apt repositories..."
+        if timeout 10 apt-get update >/dev/null 2>&1; then
+            REPO_OK=true
+        fi
+    fi
+    
+    if [ "$REPO_OK" = false ]; then
+        handle_error "Package repository access failed - check network and DNS configuration"
     fi
 
     log "✅ System resources validated"
@@ -277,6 +361,12 @@ sudo tee /opt/citadel/scripts/python-error-handler.sh << 'EOF'
 
 set -euo pipefail
 
+# Check for root privileges at script start
+if [ "$EUID" -ne 0 ]; then
+    echo "ERROR: This script requires root privileges for system-level operations"
+    exit 1
+fi
+
 BACKUP_DIR="/opt/citadel/backups/python-$(date +%Y%m%d-%H%M%S)"
 LOG_FILE="/opt/citadel/logs/python-setup.log"
 
@@ -311,6 +401,12 @@ create_backup() {
 
 # Rollback function
 rollback_changes() {
+    # Check for root privileges for system-level changes
+    if [ "$EUID" -ne 0 ]; then
+        log "ERROR: Root privileges required for rollback operations"
+        return 1
+    fi
+    
     if [ -z "${BACKUP_DIR:-}" ] || [ ! -d "$BACKUP_DIR" ]; then
         log "ERROR: No backup directory found for rollback"
         return 1
@@ -329,8 +425,8 @@ rollback_changes() {
     # Remove Python alternatives if they were added
     if update-alternatives --list python3 2>/dev/null | grep -q "python3.12"; then
         log "Removing Python alternatives"
-        sudo update-alternatives --remove python3 /usr/bin/python3.12 2>/dev/null || true
-        sudo update-alternatives --remove python /usr/bin/python3.12 2>/dev/null || true
+        update-alternatives --remove python3 /usr/bin/python3.12 2>/dev/null || true
+        update-alternatives --remove python /usr/bin/python3.12 2>/dev/null || true
     fi
     
     log "✅ Rollback completed"
@@ -487,12 +583,25 @@ chmod +x /opt/citadel/scripts/python-error-handler.sh
 
 2. **Create Environment Management Script**
    ```bash
-   # Create environment management script
+   # Create environment management script with configuration-driven approach
    tee /opt/citadel/scripts/env-manager.sh << 'EOF'
    #!/bin/bash
    # env-manager.sh - Manage Python virtual environments
    
    CITADEL_ROOT="/opt/citadel"
+   CONFIG_FILE="/opt/citadel/configs/python-config.json"
+   LOAD_CONFIG_SCRIPT="/opt/citadel/scripts/load_env_config.py"
+   
+   # Load environment names from configuration
+   if [ -f "$CONFIG_FILE" ] && [ -f "$LOAD_CONFIG_SCRIPT" ]; then
+       # Use configuration-driven approach
+       eval "$(python3 "$LOAD_CONFIG_SCRIPT" "$CONFIG_FILE" environments)"
+   else
+       # Fallback to hardcoded values
+       echo "Warning: Configuration not found, using hardcoded values"
+   fi
+   
+   # Default environment paths
    MAIN_ENV="$CITADEL_ROOT/citadel-env"
    VLLM_ENV="$CITADEL_ROOT/vllm-env"
    DEV_ENV="$CITADEL_ROOT/dev-env"
@@ -598,7 +707,21 @@ chmod +x /opt/citadel/scripts/python-error-handler.sh
    esac
    EOF
    
+   # Verify script creation and set permissions
+   if [ ! -f /opt/citadel/scripts/env-manager.sh ]; then
+       echo "ERROR: Failed to create env-manager.sh script"
+       exit 1
+   fi
+   
    chmod +x /opt/citadel/scripts/env-manager.sh
+   
+   # Verify script is executable
+   if [ ! -x /opt/citadel/scripts/env-manager.sh ]; then
+       echo "ERROR: env-manager.sh script is not executable"
+       exit 1
+   fi
+   
+   echo "✅ Environment manager script created successfully"
    ```
 
 3. **Create Additional Specialized Environments**
@@ -620,8 +743,17 @@ chmod +x /opt/citadel/scripts/python-error-handler.sh
    # Activate main environment
    source /opt/citadel/citadel-env/bin/activate
    
-   # Install PyTorch with CUDA 12.4 support
-   pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+   # Install PyTorch with CUDA 12.4 support (check for latest compatible version)
+   # Note: Verify PyTorch compatibility with CUDA version before installation
+   PYTORCH_INDEX_URL="https://download.pytorch.org/whl/cu124"
+   
+   echo "Installing PyTorch with CUDA 12.4 support..."
+   echo "Index URL: $PYTORCH_INDEX_URL"
+   
+   if ! pip install torch torchvision torchaudio --index-url "$PYTORCH_INDEX_URL"; then
+       echo "Failed to install PyTorch with CUDA 12.4, trying stable release..."
+       pip install torch torchvision torchaudio
+   fi
    
    # Verify PyTorch installation
    python -c "import torch; print(f'PyTorch version: {torch.__version__}')"
@@ -661,25 +793,37 @@ chmod +x /opt/citadel/scripts/python-error-handler.sh
    # Activate main environment
    source /opt/citadel/citadel-env/bin/activate
    
-   # Install core AI/ML libraries
-   pip install \
-     transformers>=4.36.0 \
-     tokenizers>=0.15.0 \
-     accelerate>=0.25.0 \
-     datasets>=2.14.0 \
-     evaluate>=0.4.0 \
-     huggingface-hub>=0.19.0 \
-     safetensors>=0.4.0
+   # Install core AI/ML libraries with version constraints
+   echo "Installing core AI/ML libraries..."
    
-   # Install additional ML utilities
-   pip install \
-     numpy>=1.24.0 \
-     scipy>=1.11.0 \
-     scikit-learn>=1.3.0 \
-     pandas>=2.0.0 \
-     matplotlib>=3.7.0 \
-     seaborn>=0.12.0 \
-     plotly>=5.15.0
+   # Create requirements file for better dependency management
+   cat > /tmp/ai_requirements.txt << 'REQUIREMENTS'
+transformers>=4.36.0,<5.0.0
+tokenizers>=0.15.0,<1.0.0
+accelerate>=0.25.0,<1.0.0
+datasets>=2.14.0,<3.0.0
+evaluate>=0.4.0,<1.0.0
+huggingface-hub>=0.19.0,<1.0.0
+safetensors>=0.4.0,<1.0.0
+REQUIREMENTS
+   
+   pip install -r /tmp/ai_requirements.txt
+   
+   # Create requirements file for ML utilities
+   cat > /tmp/ml_utils_requirements.txt << 'REQUIREMENTS'
+numpy>=1.24.0,<2.0.0
+scipy>=1.11.0,<2.0.0
+scikit-learn>=1.3.0,<2.0.0
+pandas>=2.0.0,<3.0.0
+matplotlib>=3.7.0,<4.0.0
+seaborn>=0.12.0,<1.0.0
+plotly>=5.15.0,<6.0.0
+REQUIREMENTS
+   
+   pip install -r /tmp/ml_utils_requirements.txt
+   
+   # Clean up temporary files
+   rm -f /tmp/ai_requirements.txt /tmp/ml_utils_requirements.txt
    
    # Install development and debugging tools
    pip install \
@@ -794,9 +938,21 @@ chmod +x /opt/citadel/scripts/python-error-handler.sh
    # Hugging Face configuration
    def configure_huggingface():
        """Configure Hugging Face authentication and cache"""
-       # Set authentication token
-       os.environ['HF_TOKEN'] = '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'
-       os.environ['HUGGINGFACE_HUB_TOKEN'] = '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'
+       # Set authentication token from environment or config file
+       # SECURITY NOTE: Never hardcode tokens in source code
+       hf_token = os.environ.get('HF_TOKEN')
+       if not hf_token:
+           # Try to read from secure config file
+           try:
+               with open('/opt/citadel/configs/.hf_token', 'r') as f:
+                   hf_token = f.read().strip()
+           except FileNotFoundError:
+               print("WARNING: HF_TOKEN not found in environment or config file")
+               print("Please set HF_TOKEN environment variable or create /opt/citadel/configs/.hf_token")
+               return
+       
+       os.environ['HF_TOKEN'] = hf_token
+       os.environ['HUGGINGFACE_HUB_TOKEN'] = hf_token
        
        # Set cache directories
        os.environ['HF_HOME'] = '/mnt/citadel-models/cache'
@@ -848,9 +1004,18 @@ chmod +x /opt/citadel/scripts/python-error-handler.sh
        echo "✅ Python optimizations applied"
    fi
    
-   # Set Hugging Face authentication
-   export HF_TOKEN="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"
-   export HUGGINGFACE_HUB_TOKEN="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"
+   # Set Hugging Face authentication from secure source
+   HF_TOKEN_FILE="/opt/citadel/configs/.hf_token"
+   if [ -f "$HF_TOKEN_FILE" ]; then
+       export HF_TOKEN="$(cat "$HF_TOKEN_FILE")"
+       export HUGGINGFACE_HUB_TOKEN="$HF_TOKEN"
+       echo "✅ Hugging Face token loaded from secure file"
+   elif [ -n "${HF_TOKEN:-}" ]; then
+       export HUGGINGFACE_HUB_TOKEN="$HF_TOKEN"
+       echo "✅ Hugging Face token loaded from environment"
+   else
+       echo "⚠️  WARNING: HF_TOKEN not found. Set via environment or create $HF_TOKEN_FILE"
+   fi
    export HF_HOME="/mnt/citadel-models/cache"
    export TRANSFORMERS_CACHE="/mnt/citadel-models/cache/transformers"
    
@@ -955,7 +1120,69 @@ else:
 EOF
 ```
 
-### Step 4: Performance Benchmarking
+### Step 4: Dependencies and Library Validation
+```bash
+# Comprehensive dependency validation
+echo "=== Dependencies and Library Validation ==="
+source /opt/citadel/citadel-env/bin/activate
+
+python << 'EOF'
+import sys
+import importlib
+import subprocess
+from pathlib import Path
+
+def check_import(module_name, version_attr=None):
+    """Check if a module can be imported and optionally verify version."""
+    try:
+        module = importlib.import_module(module_name)
+        if version_attr:
+            version = getattr(module, version_attr, 'unknown')
+            print(f"✅ {module_name}: {version}")
+        else:
+            print(f"✅ {module_name}: imported successfully")
+        return True
+    except ImportError as e:
+        print(f"❌ {module_name}: {e}")
+        return False
+
+print("Checking core dependencies...")
+dependencies = [
+    ('torch', '__version__'),
+    ('transformers', '__version__'),
+    ('numpy', '__version__'),
+    ('pandas', '__version__'),
+    ('fastapi', '__version__'),
+    ('uvicorn', '__version__'),
+    ('psutil', '__version__'),
+    ('rich', '__version__'),
+]
+
+failed_imports = []
+for module, version_attr in dependencies:
+    if not check_import(module, version_attr):
+        failed_imports.append(module)
+
+if failed_imports:
+    print(f"\n❌ Failed imports: {', '.join(failed_imports)}")
+    print("Run: pip install <package_name> to install missing packages")
+    sys.exit(1)
+else:
+    print("\n✅ All core dependencies are properly installed")
+
+# Check for common conflicts
+print("\nChecking for potential conflicts...")
+result = subprocess.run([sys.executable, '-m', 'pip', 'check'], 
+                       capture_output=True, text=True)
+if result.returncode == 0:
+    print("✅ No dependency conflicts detected")
+else:
+    print("⚠️  Dependency conflicts detected:")
+    print(result.stdout)
+    print(result.stderr)
+EOF
+```
+### Step 5: Performance Benchmarking
 ```bash
 # Run performance benchmark
 echo "=== Performance Benchmarking ==="
@@ -1024,9 +1251,23 @@ EOF
 ### Issue: PyTorch CUDA Not Working
 **Symptoms**: `torch.cuda.is_available()` returns False
 **Solutions**:
-- Verify NVIDIA drivers: `nvidia-smi`
-- Check CUDA installation: `nvcc --version`
-- Reinstall PyTorch: `pip install torch --index-url https://download.pytorch.org/whl/cu124 --force-reinstall`
+1. Verify NVIDIA drivers: `nvidia-smi`
+2. Check CUDA installation: `nvcc --version` or `ls /usr/local/cuda*/version.txt`
+3. Verify PyTorch CUDA compatibility:
+   ```bash
+   python -c "import torch; print(f'PyTorch: {torch.__version__}, CUDA: {torch.version.cuda}')"
+   ```
+4. Reinstall PyTorch with correct CUDA version:
+   ```bash
+   pip uninstall torch torchvision torchaudio
+   pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+   ```
+5. Check for conflicting CUDA installations:
+   ```bash
+   which nvcc
+   echo $CUDA_HOME
+   echo $LD_LIBRARY_PATH
+   ```
 
 ### Issue: Memory or Performance Issues
 **Symptoms**: Out of memory errors, slow performance

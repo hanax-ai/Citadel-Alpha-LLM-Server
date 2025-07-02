@@ -6,8 +6,20 @@ Pydantic-based settings for centralized configuration management
 
 from typing import Optional, Dict, List
 from pathlib import Path
-from pydantic import BaseSettings, Field, validator
 import os
+
+try:
+    # Pydantic v2 - BaseSettings moved to pydantic-settings
+    from pydantic_settings import BaseSettings
+    from pydantic import Field, field_validator
+    PYDANTIC_V2 = True
+except ImportError:
+    try:
+        # Pydantic v1 fallback
+        from pydantic import BaseSettings, Field, validator
+        PYDANTIC_V2 = False
+    except ImportError:
+        raise ImportError("Neither pydantic-settings nor pydantic v1 BaseSettings available")
 
 
 class VLLMInstallationSettings(BaseSettings):
@@ -78,23 +90,44 @@ class VLLMInstallationSettings(BaseSettings):
         description="Model storage directory"
     )
     
-    @validator("dev_env_path", "hf_cache_dir", "model_storage_path")
-    def validate_paths_exist(cls, v):
-        """Validate that critical paths exist"""
-        path = Path(v)
-        if not path.exists():
-            # Create directory if it doesn't exist
-            path.mkdir(parents=True, exist_ok=True)
-        return str(path.absolute())
-    
-    @validator("hf_token")
-    def validate_hf_token(cls, v):
-        """Validate HF token format"""
-        if not v.startswith("hf_"):
-            raise ValueError("Hugging Face token must start with 'hf_'")
-        if len(v) < 20:
-            raise ValueError("Hugging Face token appears to be invalid (too short)")
-        return v
+    if PYDANTIC_V2:
+        @field_validator("dev_env_path", "hf_cache_dir", "model_storage_path")
+        @classmethod
+        def validate_paths_exist(cls, v):
+            """Validate that critical paths exist"""
+            path = Path(v)
+            if not path.exists():
+                # Create directory if it doesn't exist
+                path.mkdir(parents=True, exist_ok=True)
+            return str(path.absolute())
+        
+        @field_validator("hf_token")
+        @classmethod
+        def validate_hf_token(cls, v):
+            """Validate HF token format"""
+            if not v.startswith("hf_"):
+                raise ValueError("Hugging Face token must start with 'hf_'")
+            if len(v) < 20:
+                raise ValueError("Hugging Face token appears to be invalid (too short)")
+            return v
+    else:
+        @validator("dev_env_path", "hf_cache_dir", "model_storage_path")
+        def validate_paths_exist(cls, v):
+            """Validate that critical paths exist"""
+            path = Path(v)
+            if not path.exists():
+                # Create directory if it doesn't exist
+                path.mkdir(parents=True, exist_ok=True)
+            return str(path.absolute())
+        
+        @validator("hf_token")
+        def validate_hf_token(cls, v):
+            """Validate HF token format"""
+            if not v.startswith("hf_"):
+                raise ValueError("Hugging Face token must start with 'hf_'")
+            if len(v) < 20:
+                raise ValueError("Hugging Face token appears to be invalid (too short)")
+            return v
     
     class Config:
         env_file = ".env"
@@ -135,6 +168,7 @@ class VLLMModelSettings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = False
+        extra = "allow"
 
 
 class VLLMTestSettings(BaseSettings):
@@ -167,6 +201,7 @@ class VLLMTestSettings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = False
+        extra = "allow"
 
 
 # Configuration Factory

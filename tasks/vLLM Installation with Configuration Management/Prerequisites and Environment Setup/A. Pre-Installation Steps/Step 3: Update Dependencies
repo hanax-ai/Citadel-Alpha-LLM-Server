@@ -1,0 +1,13 @@
+# Update core dependencies to latest compatible versions
+pip install --upgrade \
+  pip \
+  setuptools \
+  wheel \
+  packaging \
+  ninja
+
+# Update PyTorch to latest stable
+pip install --upgrade torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+
+# Verify PyTorch update
+python -c "import torch; print(f'Updated PyTorch: {torch.__version__}')"
