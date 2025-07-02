@@ -98,7 +98,10 @@ class NVIDIABackupManager:
         modprobe_dir = Path("/etc/modprobe.d")
         
         for config_file in config_files:
-            src_path = Path(config_file).expanduser()
+            if config_file.startswith("~/"):
+                src_path = Path(config_file).expanduser()
+            else:
+                src_path = Path(config_file)
             if src_path.exists():
                 try:
                     dst_path = self.current_backup_dir / src_path.name
@@ -167,8 +170,9 @@ class NVIDIABackupManager:
                     if 'nvidia' in line.lower()
                 ]
                 gpu_info = gpu_lines if gpu_lines else "No NVIDIA GPUs detected"
-            except:
-                pass
+            except (subprocess.CalledProcessError, FileNotFoundError, OSError) as e:
+                self.logger.debug(f"Failed to get GPU info via lspci: {e}")
+                gpu_info = "GPU detection failed"
                 
             return {
                 "kernel_version": kernel_result.stdout.strip(),
@@ -217,9 +221,16 @@ class NVIDIABackupManager:
             backup_file = backup_dir / backup_name
             if backup_file.exists():
                 try:
-                    if target_path.parent.exists():
-                        shutil.copy2(backup_file, target_path)
-                        self.logger.info(f"📄 Restored {target_path}")
+                    # Ensure parent directory exists
+                    target_path.parent.mkdir(parents=True, exist_ok=True)
+                    
+                    # Copy the file with error handling
+                    shutil.copy2(backup_file, target_path)
+                    self.logger.info(f"📄 Restored {target_path}")
+                except PermissionError as e:
+                    self.logger.warning(f"Permission denied restoring {target_path}: {e}")
+                except OSError as e:
+                    self.logger.warning(f"OS error restoring {target_path}: {e}")
                 except Exception as e:
                     self.logger.warning(f"Failed to restore {target_path}: {e}")
         
@@ -228,10 +239,20 @@ class NVIDIABackupManager:
         if backup_modprobe.exists():
             try:
                 target_modprobe = Path("/etc/modprobe.d")
-                if target_modprobe.exists():
-                    for item in backup_modprobe.iterdir():
-                        shutil.copy2(item, target_modprobe / item.name)
-                    self.logger.info("📁 Restored modprobe.d directory")
+                # Ensure target directory exists
+                target_modprobe.mkdir(parents=True, exist_ok=True)
+                
+                # Copy each file from backup modprobe.d
+                for item in backup_modprobe.iterdir():
+                    if item.is_file():
+                        target_file = target_modprobe / item.name
+                        shutil.copy2(item, target_file)
+                        
+                self.logger.info("📁 Restored modprobe.d directory")
+            except PermissionError as e:
+                self.logger.warning(f"Permission denied restoring modprobe.d: {e}")
+            except OSError as e:
+                self.logger.warning(f"OS error restoring modprobe.d: {e}")
             except Exception as e:
                 self.logger.warning(f"Failed to restore modprobe.d: {e}")
 

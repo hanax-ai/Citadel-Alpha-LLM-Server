@@ -7,6 +7,7 @@ Tests storage optimization, directory structure, symlinks, and backup integratio
 import os
 import subprocess
 import sys
+import shutil
 from pathlib import Path
 from typing import Dict, List, Tuple
 
@@ -32,8 +33,7 @@ class StorageValidator:
         all_installed = True
         
         for tool in tools:
-            success, _ = self.run_command(['which', tool])
-            if not success:
+            if shutil.which(tool) is None:
                 self.errors.append(f"Required tool missing: {tool}")
                 all_installed = False
                 
@@ -148,9 +148,9 @@ class StorageValidator:
         """Test if backup and monitoring scripts are created"""
         required_scripts = [
             '/opt/citadel/scripts/backup-config.sh',
-            'scripts/verify-models.sh',
-            'scripts/storage-monitor.sh',
-            'scripts/planb-02-storage-configuration.sh'
+            '/home/agent0/Citadel-Alpha-LLM-Server-1/scripts/verify-models.sh',
+            '/home/agent0/Citadel-Alpha-LLM-Server-1/scripts/storage-monitor.sh',
+            '/home/agent0/Citadel-Alpha-LLM-Server-1/scripts/planb-02-storage-configuration.sh'
         ]
         
         all_exist = True

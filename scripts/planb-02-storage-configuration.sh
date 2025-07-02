@@ -57,9 +57,9 @@ log "Step 2: Optimizing storage mount options"
 # Backup current fstab
 sudo cp /etc/fstab /etc/fstab.backup-planb02
 
-# Get actual UUIDs
-NVME1_UUID=$(sudo blkid "$NVME_MODEL_DEVICE" | grep -o 'UUID="[^"]*"' | cut -d'"' -f2)
-SDA_UUID=$(sudo blkid "$BACKUP_DEVICE" | grep -o 'UUID="[^"]*"' | cut -d'"' -f2)
+# Get actual UUIDs using blkid's built-in formatting
+NVME1_UUID=$(sudo blkid -s UUID -o value "$NVME_MODEL_DEVICE")
+SDA_UUID=$(sudo blkid -s UUID -o value "$BACKUP_DEVICE")
 
 # Validate UUIDs were found
 if [ -z "$NVME1_UUID" ]; then
@@ -76,7 +76,7 @@ log "✅ Model storage UUID: $NVME1_UUID"
 log "✅ Backup storage UUID: $SDA_UUID"
 
 # Remove existing citadel entries from fstab to avoid duplicates
-sudo sed -i '/citadel/d' /etc/fstab
+sudo sed -i '/\/mnt\/citadel-/d' /etc/fstab
 
 # Create optimized fstab entries
 sudo tee -a /etc/fstab << EOF
@@ -93,8 +93,27 @@ log "✅ Updated fstab with optimized mount options"
 
 # Apply new mount options
 log "Applying new mount options..."
-sudo umount /mnt/citadel-models 2>/dev/null || echo "Model storage not currently mounted"
-sudo umount /mnt/citadel-backup 2>/dev/null || echo "Backup storage not currently mounted"
+
+# Check if mount points are currently mounted and unmount only if necessary
+if mountpoint -q /mnt/citadel-models; then
+    log "Unmounting /mnt/citadel-models to apply new mount options..."
+    sudo umount /mnt/citadel-models || {
+        log "ERROR: Failed to unmount /mnt/citadel-models"
+        exit 1
+    }
+else
+    log "/mnt/citadel-models not currently mounted"
+fi
+
+if mountpoint -q /mnt/citadel-backup; then
+    log "Unmounting /mnt/citadel-backup to apply new mount options..."
+    sudo umount /mnt/citadel-backup || {
+        log "ERROR: Failed to unmount /mnt/citadel-backup"
+        exit 1
+    }
+else
+    log "/mnt/citadel-backup not currently mounted"
+fi
 
 # Test mount configuration
 sudo mount -a || {

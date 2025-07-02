@@ -160,7 +160,7 @@ configure_alternatives() {
     fi
 
     # Set up pip alternatives
-    local pip312_path=$(which pip3.12 2>/dev/null || echo "/usr/local/bin/pip3.12")
+    local pip312_path=$(command -v pip3.12 2>/dev/null || echo "/usr/local/bin/pip3.12")
 
     if [ -f "$pip312_path" ]; then
         if ! update-alternatives --install /usr/bin/pip3 pip3 "$pip312_path" 100; then
@@ -229,8 +229,12 @@ post_installation_cleanup() {
     apt-get autoclean || true
     apt-get autoremove -y || true
     
-    # Update package database
-    updatedb 2>/dev/null || true
+    # Update package database only if updatedb is available
+    if command -v updatedb >/dev/null 2>&1; then
+        updatedb 2>/dev/null || true
+    else
+        log "updatedb not available - skipping database update"
+    fi
     
     # Create status report
     local status_file="/opt/citadel/logs/python-installation-status.txt"

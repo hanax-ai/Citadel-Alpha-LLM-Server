@@ -10,7 +10,6 @@ import os
 import json
 import time
 import tempfile
-import unittest
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
 
@@ -52,7 +51,7 @@ class PythonInstallationValidator:
             if result.returncode == 0 and "Python 3.12" in result.stdout:
                 return True, f"✅ Python alternative pointing to 3.12"
             return False, f"❌ Python alternative not configured: {result.stdout}"
-        except Exception as e:
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError, OSError) as e:
             return False, f"❌ Alternatives validation error: {str(e)}"
     
     def validate_configuration(self) -> Tuple[bool, str]:
@@ -101,7 +100,19 @@ class VirtualEnvironmentValidator:
     def validate_environments(self) -> Tuple[bool, str]:
         """Validate virtual environments creation"""
         try:
-            expected_envs = ['citadel-env', 'vllm-env', 'dev-env']
+            # Load expected environments from configuration
+            config_file = "/opt/citadel/configs/python-config.json"
+            try:
+                with open(config_file, 'r') as f:
+                    config = json.load(f)
+                expected_envs = config.get('environments', {}).keys()
+                if not expected_envs:
+                    # Fallback to default environments if config is missing or incomplete
+                    expected_envs = ['citadel-env', 'vllm-env', 'dev-env']
+            except (FileNotFoundError, json.JSONDecodeError, KeyError):
+                # Fallback to default environments if config file is unavailable or invalid
+                expected_envs = ['citadel-env', 'vllm-env', 'dev-env']
+            
             missing_envs = []
             
             for env_name in expected_envs:
@@ -233,46 +244,16 @@ class PerformanceValidator:
     def validate_gpu_performance(self) -> Tuple[bool, str]:
         """Run GPU performance benchmark"""
         try:
-            benchmark_script = [
+            # Import the GPU benchmark module
+            test_script = [
                 "python", "-c",
                 """
-import torch
-import time
-import numpy as np
-
-if not torch.cuda.is_available():
-    print('CUDA not available - skipping GPU benchmark')
-    exit(0)
-
-device = torch.device('cuda:0')
-print(f'Benchmarking on: {torch.cuda.get_device_name(0)}')
-
-# Warm up
-for _ in range(5):
-    x = torch.randn(1000, 1000, device=device)
-    y = torch.randn(1000, 1000, device=device)
-    z = torch.matmul(x, y)
-
-# Benchmark
-sizes = [1000, 2000]
-for size in sizes:
-    times = []
-    for _ in range(5):
-        x = torch.randn(size, size, device=device)
-        y = torch.randn(size, size, device=device)
-        
-        torch.cuda.synchronize()
-        start_time = time.time()
-        z = torch.matmul(x, y)
-        torch.cuda.synchronize()
-        end_time = time.time()
-        
-        times.append(end_time - start_time)
-    
-    avg_time = np.mean(times)
-    print(f'Matrix {size}x{size}: {avg_time:.4f}s avg')
-
-print('GPU performance benchmark completed')
+import sys
+import os
+sys.path.append(os.path.dirname(__file__))
+from gpu_benchmark import run_gpu_benchmark
+result = run_gpu_benchmark()
+print(result)
 """
             ]
             
@@ -280,8 +261,8 @@ print('GPU performance benchmark completed')
             env['VIRTUAL_ENV'] = self.citadel_env
             env['PATH'] = f"{self.citadel_env}/bin:{env['PATH']}"
             
-            result = subprocess.run(benchmark_script, capture_output=True, text=True, 
-                                  timeout=60, env=env, cwd=self.citadel_env)
+            result = subprocess.run(test_script, capture_output=True, text=True, 
+                                  timeout=60, env=env, cwd=os.path.dirname(__file__))
             
             if result.returncode == 0:
                 return True, f"✅ GPU Performance:\n{result.stdout}"

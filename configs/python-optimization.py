@@ -10,14 +10,22 @@ import threading
 def optimize_memory():
     """Optimize Python memory usage for AI workloads"""
     # Enable garbage collection optimization
-    gc.set_threshold(700, 10, 10)
+    try:
+        gc.set_threshold(700, 10, 10)
+        print("Garbage collection thresholds configured successfully")
+    except Exception as e:
+        print(f"Warning: Failed to configure garbage collection thresholds: {e}")
     
     # Set memory allocation strategy
-    os.environ['MALLOC_ARENA_MAX'] = '4'
-    os.environ['MALLOC_MMAP_THRESHOLD_'] = '131072'
-    os.environ['MALLOC_TRIM_THRESHOLD_'] = '131072'
-    os.environ['MALLOC_TOP_PAD_'] = '131072'
-    os.environ['MALLOC_MMAP_MAX_'] = '65536'
+    try:
+        os.environ['MALLOC_ARENA_MAX'] = '4'
+        os.environ['MALLOC_MMAP_THRESHOLD_'] = '131072'
+        os.environ['MALLOC_TRIM_THRESHOLD_'] = '131072'
+        os.environ['MALLOC_TOP_PAD_'] = '131072'
+        os.environ['MALLOC_MMAP_MAX_'] = '65536'
+        print("Memory allocation environment variables configured successfully")
+    except Exception as e:
+        print(f"Warning: Failed to configure memory allocation environment variables: {e}")
 
 # Reason: Optimize threading for multi-GPU workloads
 def optimize_threading():

@@ -80,6 +80,8 @@ class PLANB01Validator:
         success, output = self.run_command("lscpu | grep 'Model name'")
         if success and "Intel" in output:
             checks["cpu"] = "✅ CPU detected: " + output.split(":", 1)[1].strip()
+        elif success and "AMD" in output:
+            checks["cpu"] = "✅ CPU detected: " + output.split(":", 1)[1].strip()
         else:
             checks["cpu"] = "❌ CPU detection failed"
 
@@ -96,11 +98,17 @@ class PLANB01Validator:
 
         # GPU check
         success, output = self.run_command("lspci | grep -i nvidia")
-        gpu_count = len(output.split('\n')) if output else 0
-        if gpu_count >= 2:
-            checks["gpu"] = f"✅ {gpu_count//2} NVIDIA GPUs detected"
-        elif gpu_count > 0:
-            checks["gpu"] = f"⚠️ {gpu_count} NVIDIA GPU entries detected (expected 4)"
+        if success and output:
+            # Count unique GPUs by filtering for VGA/3D controller entries
+            gpu_lines = [line for line in output.split('\n') if line and ('VGA' in line or '3D controller' in line)]
+            gpu_count = len(gpu_lines)
+            
+            if gpu_count >= 2:
+                checks["gpu"] = f"✅ {gpu_count} NVIDIA GPUs detected"
+            elif gpu_count == 1:
+                checks["gpu"] = f"✅ {gpu_count} NVIDIA GPU detected"
+            else:
+                checks["gpu"] = f"⚠️ NVIDIA hardware detected but no GPUs identified"
         else:
             checks["gpu"] = "❌ NVIDIA GPUs not detected"
 

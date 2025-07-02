@@ -73,16 +73,14 @@ check_prerequisites() {
     log_step "Checking prerequisites"
     
     # Check if running as regular user with sudo access
-    # if [[ $EUID -eq 0 ]]; then
-    #     log_error "Do not run this script as root. Use a regular user with sudo access."
-    #     exit 1
-    # fi
+    if [[ $EUID -eq 0 ]]; then
+        log_warn "Running as root - some operations may have different behavior"
+    fi
     
-    # Check  access
-    ###########if !  -n true 2>/dev/null; then
-    #    ##log_error "Sudo access required. Please run:  -v"
-    #    #exit 1
-    #fi
+    # Check sudo access
+    if ! sudo -n true 2>/dev/null; then
+        log_warn "Sudo access may be required for some operations"
+    fi
     
     # Check Ubuntu version
     if ! grep -q "Ubuntu 24.04" /etc/os-release; then
@@ -319,7 +317,7 @@ print(settings.cuda_version)
     
     log_info "Installing CUDA Toolkit $cuda_version..."
     
-     apt install -y "cuda" || {
+    sudo apt install -y "cuda" || {
         log_error "Failed to install CUDA Toolkit"
         #exit 1
     }
@@ -377,11 +375,44 @@ configure_environment() {
     [[ -f /etc/environment ]] && cp /etc/environment /etc/environment.backup.$(date +%Y%m%d-%H%M%S)
     [[ -f ~/.bashrc ]] && cp ~/.bashrc ~/.bashrc.backup.$(date +%Y%m%d-%H%M%S)
     
-    # Detect CUDA installation path
-    local cuda_path="/usr/local/cuda-12"
-    if [[ ! -d "$cuda_path" ]]; then
-        cuda_path="/usr/local/cuda"
+    # Detect CUDA installation path dynamically
+    local cuda_path=""
+    local possible_paths=(
+        "/usr/local/cuda-12.6"
+        "/usr/local/cuda-12.5"
+        "/usr/local/cuda-12.4"
+        "/usr/local/cuda-12.3"
+        "/usr/local/cuda-12.2"
+        "/usr/local/cuda-12.1"
+        "/usr/local/cuda-12.0"
+        "/usr/local/cuda-12"
+        "/usr/local/cuda"
+        "/opt/cuda"
+    )
+    
+    # Try to find CUDA installation by checking for highest version first
+    for path in "${possible_paths[@]}"; do
+        if [[ -d "$path" && -f "$path/bin/nvcc" ]]; then
+            cuda_path="$path"
+            break
+        fi
+    done
+    
+    # If no standard path found, try to detect from package manager
+    if [[ -z "$cuda_path" ]]; then
+        local detected_path
+        detected_path=$(find /usr/local -maxdepth 1 -name "cuda*" -type d 2>/dev/null | sort -V | tail -1)
+        if [[ -n "$detected_path" && -f "$detected_path/bin/nvcc" ]]; then
+            cuda_path="$detected_path"
+        fi
     fi
+    
+    # Final fallback check
+    if [[ -z "$cuda_path" ]]; then
+        log_error "CUDA installation not found in any expected location"
+        return 1
+    fi
+    
     log_info "Found CUDA installation at: $cuda_path"
     
     # Get current PATH
@@ -389,10 +420,10 @@ configure_environment() {
     current_path=$(grep "^PATH=" /etc/environment 2>/dev/null | cut -d'=' -f2 | tr -d '"' || echo "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin")
     
     # Update system environment
-    echo "PATH=\"${current_path}:${cuda_path}/bin\"" | sudo tee /etc/environment
-    echo "CUDA_HOME=\"${cuda_path}\"" | sudo tee -a /etc/environment
-    echo "CUDA_ROOT=\"${cuda_path}\"" | sudo tee -a /etc/environment
-    echo "LD_LIBRARY_PATH=\"${cuda_path}/lib64:${cuda_path}/extras/CUPTI/lib64\"" | sudo tee -a /etc/environment
+    echo "PATH=\"${current_path}:${cuda_path}/bin\"" | tee /etc/environment
+    echo "CUDA_HOME=\"${cuda_path}\"" | tee -a /etc/environment
+    echo "CUDA_ROOT=\"${cuda_path}\"" | tee -a /etc/environment
+    echo "LD_LIBRARY_PATH=\"${cuda_path}/lib64:${cuda_path}/extras/CUPTI/lib64\"" | tee -a /etc/environment
     
     # Update user bashrc if CUDA configuration doesn't exist
     if ! grep -q "NVIDIA CUDA Configuration" ~/.bashrc; then
@@ -410,6 +441,9 @@ EOF
     fi
     
     log_info "✅ Environment variables configured"
+    if [ -f "$HOME/.bashrc" ]; then
+        sudo -u $USER bash -i -c "source $HOME/.bashrc"
+    fi
 }
 
 # Main execution function

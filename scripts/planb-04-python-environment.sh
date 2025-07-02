@@ -7,11 +7,20 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_FILE="/opt/citadel/configs/python-config.json"
 LOG_FILE="/opt/citadel/logs/python-setup.log"
 ERROR_HANDLER="${SCRIPT_DIR}/python-error-handler.sh"
+START_TIME=$(date +%s)
 
 # Ensure log directory exists
 mkdir -p "$(dirname "$LOG_FILE")"
 touch "$LOG_FILE"
-chown $(whoami):$(whoami) "$LOG_FILE"
+
+# Set proper ownership - use original user if running via sudo, otherwise current user
+if [[ $EUID -eq 0 ]] && [[ -n "${SUDO_USER:-}" ]]; then
+    # Running as root via sudo, use the original user
+    chown "$SUDO_USER:$SUDO_USER" "$LOG_FILE"
+else
+    # Not running as root or no sudo user available
+    chown "$(whoami):$(whoami)" "$LOG_FILE"
+fi
 
 # Logging function
 log() {
@@ -29,7 +38,7 @@ handle_error() {
 # Display banner
 display_banner() {
     echo "🚀 PLANB-04: Python 3.12 Environment Setup and Optimization"
-    echo "=" * 70
+    printf '=%.0s' {1..70}; echo
     echo "Task: Install and configure Python 3.12 with optimized virtual environment"
     echo "Duration: 30-45 minutes"
     echo "Prerequisites: PLANB-01, PLANB-02, and PLANB-03 completed"
@@ -54,7 +63,14 @@ validate_system_readiness() {
 
     # Ensure required directories exist
     mkdir -p /opt/citadel/{scripts,configs,logs,backups}
-    chown -R $(whoami):$(whoami) /opt/citadel
+    
+    # Set proper ownership - use original user if running via sudo
+    if [[ -n "${SUDO_USER:-}" ]]; then
+        chown -R "$SUDO_USER:$SUDO_USER" /opt/citadel
+    else
+        chown -R "$(whoami):$(whoami)" /opt/citadel
+    fi
+    
     mkdir -p /mnt/citadel-models/cache/{transformers,datasets}
 
     log "✅ System readiness validated"
@@ -110,6 +126,11 @@ run_virtual_environments() {
 # Step 4: Core Dependencies Installation
 install_core_dependencies() {
     log "📦 Step 4: Installing Core AI/ML Dependencies"
+    
+    # Check if virtual environment activation script exists
+    if [ ! -f "/opt/citadel/citadel-env/bin/activate" ]; then
+        handle_error "Virtual environment activation script not found - virtual environment may not have been created successfully"
+    fi
     
     # Activate main environment for dependency installation
     source /opt/citadel/citadel-env/bin/activate
@@ -296,8 +317,6 @@ EOF
 
 # Main execution function
 main() {
-    local START_TIME=$(date +%s)
-    
     display_banner
     
     log "🚀 Starting PLANB-04 Python Environment Setup"
@@ -318,7 +337,7 @@ main() {
     
     echo ""
     echo "🎉 PLANB-04 Python Environment Setup COMPLETED!"
-    echo "=" * 50
+    printf '=%.0s' {1..50}; echo
     echo "✅ All modules executed successfully"
     echo "⏱️  Total duration: ${DURATION} seconds"
     echo "🐍 Python 3.12 with AI optimizations ready"

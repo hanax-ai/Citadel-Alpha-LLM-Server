@@ -55,7 +55,7 @@
 **Issue**: Backup cron job validation test failing (9/10 tests passing)
 **Symptom**: "Could not check cron jobs" error in validation script
 **Impact**: Low - backup functionality likely working, validation test issue
-**Location**: `test_backup_cron()` method in [`tests/test_planb_02_validation.py`](../tests/test_planb_02_validation.py)
+**Location**: `test_backup_cron()` method in [`tests/test_planb_02_validation.py`](/tests/test_planb_02_validation.py)
 **Fix**: Investigate cron job detection method and update validation logic
 **Priority**: Low
 **Date Added**: 2025-01-07

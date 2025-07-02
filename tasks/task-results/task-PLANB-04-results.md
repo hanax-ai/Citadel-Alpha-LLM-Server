@@ -83,8 +83,31 @@
   "python": {
     "version": "3.12",
     "repository": "ppa:deadsnakes/ppa",
-    "packages": [...],
-    "build_dependencies": [...]
+    "packages": [
+      "python3.12",
+      "python3.12-dev",
+      "python3.12-venv",
+      "python3.12-distutils",
+      "python3-pip"
+    ],
+    "build_dependencies": [
+      "build-essential",
+      "cmake",
+      "pkg-config",
+      "libffi-dev",
+      "libssl-dev",
+      "zlib1g-dev",
+      "libbz2-dev",
+      "libreadline-dev",
+      "libsqlite3-dev",
+      "libncurses5-dev",
+      "libncursesw5-dev",
+      "xz-utils",
+      "tk-dev",
+      "libxml2-dev",
+      "libxmlsec1-dev",
+      "liblzma-dev"
+    ]
   },
   "environments": {
     "citadel-env": {"purpose": "Main application environment"},
@@ -92,9 +115,18 @@
     "dev-env": {"purpose": "Development and testing environment"}
   },
   "optimization": {
-    "memory": {...},
-    "threading": {...},
-    "cuda": {...}
+    "memory": {
+      "gc_threshold": [700, 10, 10],
+      "malloc_trim_threshold": 128000
+    },
+    "threading": {
+      "max_workers": "auto",
+      "thread_affinity": true
+    },
+    "cuda": {
+      "memory_fraction": 0.9,
+      "allow_growth": true
+    }
   }
 }
 ```

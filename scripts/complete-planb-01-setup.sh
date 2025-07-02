@@ -93,23 +93,37 @@ fi
 # =============================================================================
 log "Step 3: Configuring additional storage..."
 
-# Get current disk UUIDs
-NVME1_UUID=$(blkid /dev/nvme1n1 | grep -o 'UUID="[^"]*"' | cut -d'"' -f2 2>/dev/null || echo "")
-SDA_UUID=$(blkid /dev/sda | grep -o 'UUID="[^"]*"' | cut -d'"' -f2 2>/dev/null || echo "")
+# Get current disk UUIDs using robust blkid output
+NVME1_UUID=$(blkid -s UUID -o value /dev/nvme1n1 2>/dev/null || echo "")
+SDA_UUID=$(blkid -s UUID -o value /dev/sda 2>/dev/null || echo "")
 
 # Format drives if not already formatted
 if [[ -z "$NVME1_UUID" ]]; then
-    log "Formatting nvme1n1 for model storage..."
-    mkfs.ext4 /dev/nvme1n1 -L "citadel-models"
-    NVME1_UUID=$(blkid /dev/nvme1n1 | grep -o 'UUID="[^"]*"' | cut -d'"' -f2)
+    warn "WARNING: /dev/nvme1n1 will be formatted for model storage. This will DESTROY ALL DATA on the device!"
+    echo -n "Are you sure you want to format /dev/nvme1n1? (yes/no): "
+    read -r CONFIRM_NVME
+    if [[ "$CONFIRM_NVME" == "yes" ]]; then
+        log "Formatting nvme1n1 for model storage..."
+        mkfs.ext4 /dev/nvme1n1 -L "citadel-models"
+        NVME1_UUID=$(blkid -s UUID -o value /dev/nvme1n1)
+    else
+        error "User cancelled nvme1n1 formatting. Cannot continue without storage setup."
+    fi
 else
     info "nvme1n1 already formatted"
 fi
 
 if [[ -z "$SDA_UUID" ]]; then
-    log "Formatting sda for backup storage..."
-    mkfs.ext4 /dev/sda -L "citadel-backup"
-    SDA_UUID=$(blkid /dev/sda | grep -o 'UUID="[^"]*"' | cut -d'"' -f2)
+    warn "WARNING: /dev/sda will be formatted for backup storage. This will DESTROY ALL DATA on the device!"
+    echo -n "Are you sure you want to format /dev/sda? (yes/no): "
+    read -r CONFIRM_SDA
+    if [[ "$CONFIRM_SDA" == "yes" ]]; then
+        log "Formatting sda for backup storage..."
+        mkfs.ext4 /dev/sda -L "citadel-backup"
+        SDA_UUID=$(blkid -s UUID -o value /dev/sda)
+    else
+        error "User cancelled sda formatting. Cannot continue without storage setup."
+    fi
 else
     info "sda already formatted"
 fi
@@ -150,10 +164,11 @@ chown agent0:agent0 /mnt/citadel-backup
 # =============================================================================
 log "Step 4: Expanding LVM volumes for better space utilization..."
 
-# Get available space in volume group
-VG_FREE=$(vgdisplay ubuntu-vg | grep "Free" | awk '{print $7}' | sed 's/[<>]//')
+# Get available space in volume group using machine-readable output
+VG_FREE_BYTES=$(vgs --noheadings --units b -o vg_free ubuntu-vg 2>/dev/null | tr -d ' B' || echo "0")
 
-if [[ "$VG_FREE" != "0" ]]; then
+# Check if we have meaningful free space (more than 1GB = 1073741824 bytes)
+if [[ "$VG_FREE_BYTES" =~ ^[0-9]+$ ]] && [[ "$VG_FREE_BYTES" -gt 1073741824 ]]; then
     # Extend root logical volume by 500GB if space available
     EXTEND_SIZE="500G"
     log "Extending root volume by $EXTEND_SIZE..."
@@ -258,8 +273,18 @@ echo "=== Network Test ==="
 ping -c 3 google.com
 echo ""
 echo "=== Disk I/O Test (Model Storage) ==="
-dd if=/dev/zero of=/mnt/citadel-models/iotest bs=1G count=1 oflag=dsync 2>&1
-rm -f /mnt/citadel-models/iotest
+# Check available space before creating test file (need >1GB)
+AVAILABLE_KB=$(df --output=avail /mnt/citadel-models | tail -n1)
+REQUIRED_KB=$((1024 * 1024))  # 1GB in KB
+
+if [ "$AVAILABLE_KB" -gt "$REQUIRED_KB" ]; then
+    echo "Creating 1GB test file for I/O benchmark..."
+    dd if=/dev/zero of=/mnt/citadel-models/iotest bs=1G count=1 oflag=dsync 2>&1
+    rm -f /mnt/citadel-models/iotest
+else
+    echo "ERROR: Insufficient disk space for I/O test (need 1GB, have $(($AVAILABLE_KB / 1024))MB)"
+    echo "Skipping disk I/O test to prevent storage issues"
+fi
 echo ""
 echo "=== Mount Verification ==="
 mount | grep -E "(citadel|nvme|sda)"

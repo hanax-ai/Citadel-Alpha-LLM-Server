@@ -1,7 +1,22 @@
 #!/bin/bash
 # python-error-handler.sh - Error handling and rollback for Python setup
+#
+# REQUIREMENTS: This script must be run with root privileges or sufficient
+# permissions to manage system packages, alternatives, and /opt/citadel directories.
+# 
+# Usage: sudo ./python-error-handler.sh [command]
+#   or:  Run as root user
+#
+# The script performs system-level operations including:
+# - Managing update-alternatives for Python versions
+# - Creating/removing directories in /opt/citadel
+# - Installing/removing system packages
 
 set -euo pipefail
+
+# Ensure required directories exist
+mkdir -p /opt/citadel/backups
+mkdir -p /opt/citadel/logs
 
 BACKUP_DIR="/opt/citadel/backups/python-$(date +%Y%m%d-%H%M%S)"
 LOG_FILE="/opt/citadel/logs/python-setup.log"
@@ -55,8 +70,8 @@ rollback_changes() {
     # Remove Python alternatives if they were added
     if update-alternatives --list python3 2>/dev/null | grep -q "python3.12"; then
         log "Removing Python alternatives"
-        sudo update-alternatives --remove python3 /usr/bin/python3.12 2>/dev/null || true
-        sudo update-alternatives --remove python /usr/bin/python3.12 2>/dev/null || true
+        update-alternatives --remove python3 /usr/bin/python3.12 2>/dev/null || true
+        update-alternatives --remove python /usr/bin/python3.12 2>/dev/null || true
     fi
     
     log "✅ Rollback completed"
@@ -65,11 +80,11 @@ rollback_changes() {
 # Validate step completion
 validate_step() {
     local step_name="$1"
-    local validation_command="$2"
+    local validation_function="$2"
     
     log "Validating step: $step_name"
     
-    if eval "$validation_command"; then
+    if "$validation_function"; then
         log "✅ Step validated: $step_name"
         return 0
     else
@@ -81,13 +96,13 @@ validate_step() {
 # Execute step with error handling
 execute_step() {
     local step_name="$1"
-    local step_command="$2"
-    local validation_command="$3"
+    local step_function="$2"
+    local validation_function="$3"
     
     log "Executing step: $step_name"
     
-    if eval "$step_command"; then
-        if validate_step "$step_name" "$validation_command"; then
+    if "$step_function"; then
+        if validate_step "$step_name" "$validation_function"; then
             log "✅ Step completed successfully: $step_name"
             return 0
         else
@@ -98,6 +113,29 @@ execute_step() {
         log "❌ Step execution failed: $step_name"
         return 1
     fi
+}
+
+# Example validation functions (to be called by name, not eval)
+validate_python_installation() {
+    command -v python3 >/dev/null 2>&1 && python3 --version >/dev/null 2>&1
+}
+
+validate_virtual_env() {
+    [ -d "/opt/citadel/citadel-env" ] && [ -f "/opt/citadel/citadel-env/bin/activate" ]
+}
+
+validate_pip_installation() {
+    command -v pip3 >/dev/null 2>&1 && pip3 --version >/dev/null 2>&1
+}
+
+# Example step functions (to be called by name, not eval)
+# Note: These functions require root privileges to install system packages
+install_python_step() {
+    apt update && apt install -y python3 python3-pip python3-venv
+}
+
+create_virtual_env_step() {
+    python3 -m venv /opt/citadel/citadel-env
 }
 
 case "${1:-}" in
@@ -115,10 +153,19 @@ case "${1:-}" in
         ;;
     *)
         echo "Usage: $0 {backup|rollback|validate|execute}"
-        echo "  backup                    - Create system backup"
-        echo "  rollback                  - Rollback changes"
-        echo "  validate <name> <cmd>     - Validate step completion"
-        echo "  execute <name> <cmd> <val> - Execute step with validation"
+        echo "  backup                           - Create system backup"
+        echo "  rollback                         - Rollback changes"
+        echo "  validate <name> <function_name>  - Validate step completion using function"
+        echo "  execute <name> <function> <val_function> - Execute step with validation using functions"
+        echo ""
+        echo "Example usage:"
+        echo "  $0 validate 'Python Installation' validate_python_installation"
+        echo "  $0 execute 'Install Python' install_python_step validate_python_installation"
+        echo ""
+        echo "Available validation functions:"
+        echo "  validate_python_installation, validate_virtual_env, validate_pip_installation"
+        echo "Available step functions:"
+        echo "  install_python_step, create_virtual_env_step"
         exit 1
         ;;
 esac

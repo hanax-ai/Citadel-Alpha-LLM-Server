@@ -77,36 +77,44 @@ verify_driver_installation() {
 detect_gpu_specifications() {
     log_step "Detecting GPU specifications"
     
+    # Verify Python 3 is available
+    if ! command -v python3 >/dev/null 2>&1; then
+        log_error "Python 3 is not installed or not in PATH - required for GPU detection"
+        exit 1
+    fi
+    
     if ! python3 "$SCRIPT_DIR/gpu_manager.py" detect; then
         log_warn "GPU detection failed - using default values"
         return 0
     fi
     
-    # Update configuration with detected specs
-    python3 -c "
-import sys
-sys.path.append('$PROJECT_ROOT/configs')
-sys.path.append('$SCRIPT_DIR')
-from gpu_settings import GPUSettings
-from gpu_manager import GPUDetectionManager
-from pathlib import Path
-
-# Load current settings
-settings = GPUSettings.load_from_file(Path('$CONFIG_FILE'))
-
-# Detect specifications
-detector = GPUDetectionManager()
-specs = detector.detect_gpu_specs()
-
-if specs:
-    settings.detected_specs = specs
-    settings.save_to_file(Path('$CONFIG_FILE'))
-    print('✅ GPU specifications updated')
-else:
-    print('⚠️  Using default specifications')
-"
-    
-    log_info "✅ GPU specifications detected and updated"
+    # Update configuration with detected specs using external script
+    log_info "Updating GPU configuration with detected specifications..."
+    if python3 "$SCRIPT_DIR/update_gpu_config.py" \
+        --project-root "$PROJECT_ROOT" \
+        --config-file "$CONFIG_FILE" \
+        --script-dir "$SCRIPT_DIR"; then
+        log_info "✅ GPU specifications detected and updated"
+    else
+        local exit_code=$?
+        case $exit_code in
+            1)
+                log_warn "No GPU specifications detected - using defaults"
+                ;;
+            2)
+                log_error "Required Python modules not found"
+                return 1
+                ;;
+            3)
+                log_error "Configuration file not found"
+                return 1
+                ;;
+            *)
+                log_error "GPU configuration update failed with exit code $exit_code"
+                return 1
+                ;;
+        esac
+    fi
 }
 
 # Apply GPU optimizations
@@ -127,7 +135,9 @@ configure_persistence_daemon() {
     
     # Check if nvidia-persistenced exists
     local persistenced_path
-    persistenced_path=$(which nvidia-persistenced 2>/dev/null || find /usr -name "nvidia-persistenced" 2>/dev/null | head -1 || echo "")
+    persistenced_path=$(which nvidia-persistenced 2>/dev/null || \
+                       find /usr/bin /usr/local/bin /bin /usr/sbin /usr/local/sbin /sbin \
+                       -name "nvidia-persistenced" -type f 2>/dev/null | head -1 || echo "")
     
     if [[ -z "$persistenced_path" ]]; then
         log_warn "nvidia-persistenced not found - skipping persistence configuration"
@@ -221,8 +231,33 @@ options nvidia NVreg_EnableMSI=1
 options nvidia NVreg_TCEBypassMode=1
 EOF
     
-    # Update initramfs
-    sudo update-initramfs -u
+    # Create backup of current initramfs before updating
+    log_info "Creating backup of current initramfs..."
+    local kernel_version
+    kernel_version=$(uname -r)
+    local initramfs_path="/boot/initrd.img-${kernel_version}"
+    local backup_path="/boot/initrd.img-${kernel_version}.backup-$(date +%Y%m%d-%H%M%S)"
+    
+    if [[ -f "$initramfs_path" ]]; then
+        if sudo cp "$initramfs_path" "$backup_path"; then
+            log_info "✅ Initramfs backup created: $backup_path"
+        else
+            log_warn "Failed to create initramfs backup - proceeding with caution"
+        fi
+    else
+        log_warn "Current initramfs not found at $initramfs_path"
+    fi
+    
+    # Update initramfs with error handling
+    log_info "Updating initramfs with new NVIDIA configuration..."
+    if sudo update-initramfs -u; then
+        log_info "✅ Initramfs updated successfully"
+    else
+        log_error "Failed to update initramfs - this could cause boot issues"
+        log_error "Backup available at: $backup_path (if created)"
+        log_error "Manual recovery may be required before reboot"
+        exit 1
+    fi
     
     log_info "✅ Multi-GPU configuration applied"
 }
@@ -283,7 +318,11 @@ lspci | grep -i nvidia
 echo ""
 
 echo "=== NUMA Topology ==="
-numactl --hardware | grep -A 20 "available:" 2>/dev/null || echo "NUMA information not available"
+if command -v numactl >/dev/null 2>&1; then
+    numactl --hardware | grep -A 20 "available:" || echo "NUMA hardware information not available"
+else
+    echo "numactl not installed - NUMA topology information unavailable"
+fi
 EOF
     
     chmod +x /opt/citadel/scripts/gpu-topology.sh
