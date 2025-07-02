@@ -37,24 +37,65 @@ def load_config(config_path: str) -> Optional[Dict[str, Any]]:
 
 def export_optimization_vars(config: Dict[str, Any]) -> None:
     """Export optimization-related environment variables."""
-    optimization = config.get("optimization", {})
+    # Validate that config is a dictionary
+    if not isinstance(config, dict):
+        print(f"# Warning: config is not a dictionary (type: {type(config).__name__}), using defaults", file=sys.stderr)
+        export_default_vars()
+        return
     
-    # Memory optimizations
+    # Validate that optimization section exists and is a dictionary
+    optimization = config.get("optimization", {})
+    if not isinstance(optimization, dict):
+        print(f"# Warning: optimization section is not a dictionary (type: {type(optimization).__name__}), using defaults", file=sys.stderr)
+        export_default_vars()
+        return
+    
+    # Memory optimizations with validation
     memory = optimization.get("memory", {})
-    malloc_arena_max = memory.get("malloc_arena_max", 4)
+    if not isinstance(memory, dict):
+        print(f"# Warning: memory section is not a dictionary, using default values", file=sys.stderr)
+        malloc_arena_max = 4
+    else:
+        malloc_arena_max = memory.get("malloc_arena_max", 4)
+        if not isinstance(malloc_arena_max, int):
+            print(f"# Warning: malloc_arena_max is not an integer, using default value 4", file=sys.stderr)
+            malloc_arena_max = 4
     print(f"export MALLOC_ARENA_MAX='{malloc_arena_max}'")
     
-    # Threading optimizations
+    # Threading optimizations with validation
     threading = optimization.get("threading", {})
-    max_threads = min(threading.get("max_threads", 8), 16)
+    if not isinstance(threading, dict):
+        print(f"# Warning: threading section is not a dictionary, using default values", file=sys.stderr)
+        max_threads = 8
+    else:
+        max_threads = threading.get("max_threads", 8)
+        if not isinstance(max_threads, int):
+            print(f"# Warning: max_threads is not an integer, using default value 8", file=sys.stderr)
+            max_threads = 8
+        max_threads = min(max_threads, 16)  # Cap at 16
     print(f"export OMP_NUM_THREADS='{max_threads}'")
     print(f"export MKL_NUM_THREADS='{max_threads}'")
     print(f"export NUMEXPR_NUM_THREADS='{max_threads}'")
     
-    # CUDA optimizations
+    # CUDA optimizations with validation
     cuda = optimization.get("cuda", {})
-    launch_blocking = "1" if cuda.get("launch_blocking", False) else "0"
-    cache_disable = "1" if cuda.get("cache_disable", False) else "0"
+    if not isinstance(cuda, dict):
+        print(f"# Warning: cuda section is not a dictionary, using default values", file=sys.stderr)
+        launch_blocking = "0"
+        cache_disable = "0"
+    else:
+        launch_blocking_val = cuda.get("launch_blocking", False)
+        if not isinstance(launch_blocking_val, bool):
+            print(f"# Warning: launch_blocking is not a boolean, using default value False", file=sys.stderr)
+            launch_blocking_val = False
+        launch_blocking = "1" if launch_blocking_val else "0"
+        
+        cache_disable_val = cuda.get("cache_disable", False)
+        if not isinstance(cache_disable_val, bool):
+            print(f"# Warning: cache_disable is not a boolean, using default value False", file=sys.stderr)
+            cache_disable_val = False
+        cache_disable = "1" if cache_disable_val else "0"
+    
     print(f"export CUDA_LAUNCH_BLOCKING='{launch_blocking}'")
     print(f"export CUDA_CACHE_DISABLE='{cache_disable}'")
 

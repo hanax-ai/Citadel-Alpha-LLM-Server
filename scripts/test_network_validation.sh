@@ -1,8 +1,9 @@
 #!/bin/bash
 # Test script for network validation
 
-# Source the main script functions
-cd /home/agent0/Citadel-Alpha-LLM-Server-1/scripts
+# Determine script directory dynamically
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
 
 # Define required functions for testing
 log() {
@@ -14,9 +15,42 @@ handle_error() {
     exit 1
 }
 
+# Check required network tools
+check_network_dependencies() {
+    log "Checking required network tools..."
+    
+    local missing_tools=()
+    
+    # Check for ping command
+    if ! command -v ping >/dev/null 2>&1; then
+        missing_tools+=("ping")
+    fi
+    
+    # Check for curl command
+    if ! command -v curl >/dev/null 2>&1; then
+        missing_tools+=("curl")
+    fi
+    
+    # Check for timeout command (used with apt-get)
+    if ! command -v timeout >/dev/null 2>&1; then
+        missing_tools+=("timeout")
+    fi
+    
+    if [ ${#missing_tools[@]} -gt 0 ]; then
+        log "❌ Missing required network tools: ${missing_tools[*]}"
+        log "Please install missing tools with: sudo apt update && sudo apt install -y iputils-ping curl coreutils"
+        handle_error "Cannot proceed without required network tools"
+    fi
+    
+    log "✅ All required network tools are available"
+}
+
 # Robust network connectivity validation
 validate_network_connectivity() {
     log "Validating network connectivity..."
+    
+    # Check dependencies first
+    check_network_dependencies
     
     local network_ok=false
     local connectivity_methods=0
@@ -94,7 +128,7 @@ validate_network_connectivity() {
     # Final validation
     if [ "$network_ok" = false ]; then
         log "Network connectivity summary: $successful_methods/$connectivity_methods methods successful"
-        handle_error "No network connectivity detected - required for package downloads. Tried DNS servers, PyPI mirrors, Ubuntu repositories, and package manager update."
+        handle_error "No network connectivity detected - package downloads will fail"
     else
         log "✅ Network connectivity validated ($successful_methods/$connectivity_methods methods successful)"
     fi

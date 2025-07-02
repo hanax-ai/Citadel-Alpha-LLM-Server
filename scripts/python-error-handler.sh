@@ -14,6 +14,19 @@
 
 set -euo pipefail
 
+# Check for root privileges before attempting system operations
+if [[ $EUID -ne 0 ]]; then
+    echo "ERROR: This script requires root privileges (current EUID: $EUID)" >&2
+    echo "This script performs system-level operations including:" >&2
+    echo "  - Creating directories in /opt/citadel" >&2
+    echo "  - Managing system packages and alternatives" >&2
+    echo "  - Installing/removing Python environments" >&2
+    echo "" >&2
+    echo "Please run with sudo or as root user:" >&2
+    echo "  sudo $0 $*" >&2
+    exit 1
+fi
+
 # Ensure required directories exist
 mkdir -p /opt/citadel/backups
 mkdir -p /opt/citadel/logs
@@ -24,6 +37,16 @@ LOG_FILE="/opt/citadel/logs/python-setup.log"
 # Logging function
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
+}
+
+# Check if running with root privileges
+check_root_privileges() {
+    if [[ $EUID -ne 0 ]]; then
+        log "ERROR: This operation requires root privileges (EUID: $EUID)"
+        log "Please run with sudo or as root user"
+        return 1
+    fi
+    return 0
 }
 
 # Create backup
@@ -52,6 +75,12 @@ create_backup() {
 
 # Rollback function
 rollback_changes() {
+    # Verify root privileges before attempting system-level rollback operations
+    if ! check_root_privileges; then
+        log "ERROR: rollback_changes requires root privileges for update-alternatives and /opt/citadel operations"
+        return 1
+    fi
+    
     if [ -z "${BACKUP_DIR:-}" ] || [ ! -d "$BACKUP_DIR" ]; then
         log "ERROR: No backup directory found for rollback"
         return 1
@@ -130,11 +159,24 @@ validate_pip_installation() {
 
 # Example step functions (to be called by name, not eval)
 # Note: These functions require root privileges to install system packages
+
 install_python_step() {
+    # Verify root privileges before attempting system package operations
+    if ! check_root_privileges; then
+        log "ERROR: install_python_step requires root privileges for apt operations"
+        return 1
+    fi
+    
     apt update && apt install -y python3 python3-pip python3-venv
 }
 
 create_virtual_env_step() {
+    # Verify root privileges before attempting to create directories in /opt/citadel
+    if ! check_root_privileges; then
+        log "ERROR: create_virtual_env_step requires root privileges for /opt/citadel operations"
+        return 1
+    fi
+    
     python3 -m venv /opt/citadel/citadel-env
 }
 

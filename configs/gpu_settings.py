@@ -160,7 +160,15 @@ class GPUSettings:
             if not isinstance(max_graphics_clock, int) or max_graphics_clock < 500 or max_graphics_clock > 5000:
                 raise ValueError("max_graphics_clock_mhz must be an integer between 500 and 5000")
             
-            detected_specs = DetectedSpecs(**specs_data)
+            # Extract only the fields expected by DetectedSpecs to avoid errors from extra fields
+            detected_specs_kwargs = {
+                "gpu_count": gpu_count,
+                "gpu_name": gpu_name,
+                "max_power_watts": max_power,
+                "max_memory_clock_mhz": max_memory_clock,
+                "max_graphics_clock_mhz": max_graphics_clock
+            }
+            detected_specs = DetectedSpecs(**detected_specs_kwargs)
         
         return cls(
             driver_version=driver_version,

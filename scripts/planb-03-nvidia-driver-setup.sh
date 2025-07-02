@@ -174,24 +174,24 @@ clean_existing_nvidia() {
     log_info "Removing existing NVIDIA packages..."
     
     # Remove packages with error handling
-    apt-get remove --purge "nvidia*" -y 2>/dev/null || {
+    sudo apt-get remove --purge "nvidia*" -y 2>/dev/null || {
         log_warn "Some NVIDIA packages could not be removed"
     }
     
-    apt-get remove --purge "cuda*" -y 2>/dev/null || {
+    sudo apt-get remove --purge "cuda*" -y 2>/dev/null || {
         log_warn "Some CUDA packages could not be removed"
     }
     
-    apt-get remove --purge "libnvidia*" -y 2>/dev/null || {
+    sudo apt-get remove --purge "libnvidia*" -y 2>/dev/null || {
         log_warn "Some NVIDIA library packages could not be removed"
     }
     
-    apt-get autoremove -y || log_warn "Autoremove failed"
-    apt-get autoclean || log_warn "Autoclean failed"
+    sudo apt-get autoremove -y || log_warn "Autoremove failed"
+    sudo apt-get autoclean || log_warn "Autoclean failed"
     
     # Remove configuration files
-    find /etc/modprobe.d -name "*nvidia*" -delete 2>/dev/null || true
-    find /etc/modprobe.d -name "*blacklist-nvidia*" -delete 2>/dev/null || true
+    sudo find /etc/modprobe.d -name "*nvidia*" -delete 2>/dev/null || true
+    sudo find /etc/modprobe.d -name "*blacklist-nvidia*" -delete 2>/dev/null || true
     
     log_info "✅ NVIDIA cleanup completed"
 }
@@ -200,12 +200,12 @@ clean_existing_nvidia() {
 update_system_packages() {
     log_step "Updating system packages"
     
-    apt update || {
+    sudo apt update || {
         log_error "Failed to update package lists"
         #exit 1
     }
     
-    apt upgrade -y || {
+    sudo apt upgrade -y || {
         log_warn "Some packages failed to upgrade"
     }
     
@@ -219,7 +219,7 @@ update_system_packages() {
     )
     
     log_info "Installing build dependencies..."
-    apt install -y "${build_deps[@]}" || {
+    sudo apt install -y "${build_deps[@]}" || {
         log_error "Failed to install build dependencies"
         #exit 1
     }
@@ -248,12 +248,12 @@ print(settings.get_repository_url())
         #exit 1
     }
     
-    dpkg -i /tmp/cuda-keyring.deb || {
+    sudo dpkg -i /tmp/cuda-keyring.deb || {
         log_error "Failed to install NVIDIA repository keyring"
         #exit 1
     }
     
-    apt update || {
+    sudo apt update || {
         log_error "Failed to update package lists after adding repository"
         #exit 1
     }
@@ -292,7 +292,7 @@ print(settings.driver_version)
         #exit 1
     fi
     
-    apt install -y "nvidia-driver-$driver_version" || {
+    sudo apt install -y "nvidia-driver-$driver_version" || {
         log_error "Failed to install NVIDIA driver $driver_version"
         #exit 1
     }
@@ -333,7 +333,7 @@ print(settings.cuda_version)
     
     for package in "${cuda_packages[@]}"; do
         if apt-cache search "$package" | grep -q "$package"; then
-            apt install -y "$package" || {
+            sudo apt install -y "$package" || {
                 log_warn "Failed to install $package (non-critical)"
             }
         else
@@ -356,7 +356,7 @@ install_cudnn() {
     
     for package in "${cudnn_packages[@]}"; do
         if apt-cache search "$package" | grep -q "$package"; then
-            apt install -y "$package" || {
+            sudo apt install -y "$package" || {
                 log_warn "Failed to install $package"
             }
         else
@@ -372,7 +372,7 @@ configure_environment() {
     log_step "Configuring environment variables"
     
     # Backup existing environment configuration
-    [[ -f /etc/environment ]] && cp /etc/environment /etc/environment.backup.$(date +%Y%m%d-%H%M%S)
+    [[ -f /etc/environment ]] && sudo cp /etc/environment /etc/environment.backup.$(date +%Y%m%d-%H%M%S)
     [[ -f ~/.bashrc ]] && cp ~/.bashrc ~/.bashrc.backup.$(date +%Y%m%d-%H%M%S)
     
     # Detect CUDA installation path dynamically
@@ -420,10 +420,10 @@ configure_environment() {
     current_path=$(grep "^PATH=" /etc/environment 2>/dev/null | cut -d'=' -f2 | tr -d '"' || echo "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin")
     
     # Update system environment
-    echo "PATH=\"${current_path}:${cuda_path}/bin\"" | tee /etc/environment
-    echo "CUDA_HOME=\"${cuda_path}\"" | tee -a /etc/environment
-    echo "CUDA_ROOT=\"${cuda_path}\"" | tee -a /etc/environment
-    echo "LD_LIBRARY_PATH=\"${cuda_path}/lib64:${cuda_path}/extras/CUPTI/lib64\"" | tee -a /etc/environment
+    echo "PATH=\"${current_path}:${cuda_path}/bin\"" | sudo tee /etc/environment
+    echo "CUDA_HOME=\"${cuda_path}\"" | sudo tee -a /etc/environment
+    echo "CUDA_ROOT=\"${cuda_path}\"" | sudo tee -a /etc/environment
+    echo "LD_LIBRARY_PATH=\"${cuda_path}/lib64:${cuda_path}/extras/CUPTI/lib64\"" | sudo tee -a /etc/environment
     
     # Update user bashrc if CUDA configuration doesn't exist
     if ! grep -q "NVIDIA CUDA Configuration" ~/.bashrc; then

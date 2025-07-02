@@ -99,18 +99,40 @@ detect_gpu_specifications() {
         local exit_code=$?
         case $exit_code in
             1)
-                log_warn "No GPU specifications detected - using defaults"
+                log_warn "No GPU specifications detected - using default configuration values"
+                log_warn "This may occur if GPUs are not accessible or nvidia-ml-py is not working properly"
+                log_warn "GPU functionality should still work with default settings"
                 ;;
             2)
-                log_error "Required Python modules not found"
+                log_error "Required Python modules not found - missing dependencies for GPU configuration"
+                log_error "Please install missing modules with: pip3 install nvidia-ml-py3 pynvml"
+                log_error "Or ensure the Python environment has the required GPU management libraries"
                 return 1
                 ;;
             3)
-                log_error "Configuration file not found"
+                log_error "GPU configuration file not found at: $CONFIG_FILE"
+                log_error "This indicates the initial GPU configuration setup failed or file was deleted"
+                log_error "Please re-run the initial driver setup or manually create the configuration file"
+                log_error "Expected location: $CONFIG_FILE"
+                return 1
+                ;;
+            4)
+                log_error "GPU configuration file is corrupted or contains invalid JSON"
+                log_error "Please check the file format at: $CONFIG_FILE"
+                log_error "Consider backing up and recreating the configuration file"
+                return 1
+                ;;
+            5)
+                log_error "Insufficient permissions to update GPU configuration"
+                log_error "Please ensure the script has write access to: $CONFIG_FILE"
+                log_error "Try running with appropriate permissions or check file ownership"
                 return 1
                 ;;
             *)
-                log_error "GPU configuration update failed with exit code $exit_code"
+                log_error "GPU configuration update failed with unexpected exit code: $exit_code"
+                log_error "This may indicate a Python script error or system issue"
+                log_error "Check the Python script logs and ensure all dependencies are installed"
+                log_error "Try running manually: python3 $SCRIPT_DIR/update_gpu_config.py --help"
                 return 1
                 ;;
         esac

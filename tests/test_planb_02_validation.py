@@ -18,6 +18,9 @@ class StorageValidator:
     def __init__(self):
         self.results: Dict[str, bool] = {}
         self.errors: List[str] = []
+        # Determine project root dynamically (tests directory is one level down from project root)
+        self.project_root = Path(__file__).parent.parent
+        self.scripts_dir = self.project_root / "scripts"
         
     def run_command(self, cmd: List[str]) -> Tuple[bool, str]:
         """Run command and return success status and output"""
@@ -147,20 +150,19 @@ class StorageValidator:
     def test_scripts_exist(self) -> bool:
         """Test if backup and monitoring scripts are created"""
         required_scripts = [
-            '/opt/citadel/scripts/backup-config.sh',
-            '/home/agent0/Citadel-Alpha-LLM-Server-1/scripts/verify-models.sh',
-            '/home/agent0/Citadel-Alpha-LLM-Server-1/scripts/storage-monitor.sh',
-            '/home/agent0/Citadel-Alpha-LLM-Server-1/scripts/planb-02-storage-configuration.sh'
+            Path('/opt/citadel/scripts/backup-config.sh'),
+            self.scripts_dir / 'verify-models.sh',
+            self.scripts_dir / 'storage-monitor.sh',
+            self.scripts_dir / 'planb-02-storage-configuration.sh'
         ]
         
         all_exist = True
-        for script in required_scripts:
-            script_path = Path(script)
+        for script_path in required_scripts:
             if not script_path.exists():
-                self.errors.append(f"Required script missing: {script}")
+                self.errors.append(f"Required script missing: {script_path}")
                 all_exist = False
             elif not os.access(script_path, os.X_OK):
-                self.errors.append(f"Script not executable: {script}")
+                self.errors.append(f"Script not executable: {script_path}")
                 all_exist = False
                 
         return all_exist
